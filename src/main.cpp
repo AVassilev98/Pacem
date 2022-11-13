@@ -131,10 +131,54 @@ static VkInstance createInstance()
     return instance;
 }
 
+struct PhysDeviceInfo
+{
+    VkPhysicalDevice device;
+    VkPhysicalDeviceProperties deviceProperties;
+    std::vector<VkQueueFamilyProperties> queueProperties;
+};
+
+static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
+{
+    if (!instance)
+    {
+        return {};
+    }
+
+    uint32_t numPhysicalDevices = 0;
+    VK_LOG_ERR(vkEnumeratePhysicalDevices(instance, &numPhysicalDevices, nullptr));
+    std::vector<VkPhysicalDevice> physicalDevices(numPhysicalDevices);
+    VK_LOG_ERR(vkEnumeratePhysicalDevices(instance, &numPhysicalDevices, physicalDevices.data()));
+
+    for (auto &physDevice : physicalDevices)
+    {
+        VkPhysicalDeviceProperties properties = {};
+        vkGetPhysicalDeviceProperties(physDevice, &properties);
+
+        // grab the first discrete gpu
+        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        {
+            std::cout << "Picking " << properties.deviceName << std::endl;
+
+            PhysDeviceInfo deviceInfo = {};
+            deviceInfo.device = physDevice;
+            deviceInfo.deviceProperties = properties;
+
+            uint32_t numQueueProperties = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &numQueueProperties, nullptr);
+            deviceInfo.queueProperties = std::vector<VkQueueFamilyProperties>(numQueueProperties);
+            vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &numQueueProperties, deviceInfo.queueProperties.data());
+
+            return deviceInfo;
+        }
+    }
+    return {};
+}
+
 int main()
 {
     VkInstance instance = createInstance();
-
+    PhysDeviceInfo physDeviceInfo = getPhysicalDevice(instance);
 #ifndef NDEBUG
     VkDebugUtilsMessengerEXT messenger = createDebugMessenger(instance);
 #endif
