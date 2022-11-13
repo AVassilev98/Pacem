@@ -135,7 +135,21 @@ struct PhysDeviceInfo
 {
     VkPhysicalDevice device;
     VkPhysicalDeviceProperties deviceProperties;
+    VkPhysicalDeviceFeatures deviceFeatures;
     std::vector<VkQueueFamilyProperties> queueProperties;
+};
+
+struct QueueInfo
+{
+    VkQueue queue;
+    uint32_t queueFamilyIdx;
+    uint32_t queueIdx;
+};
+
+struct DeviceInfo
+{
+    VkDevice device;
+    std::vector<QueueInfo> queues;
 };
 
 static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
@@ -164,6 +178,8 @@ static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
             deviceInfo.device = physDevice;
             deviceInfo.deviceProperties = properties;
 
+            vkGetPhysicalDeviceFeatures(physDevice, &deviceInfo.deviceFeatures);
+
             uint32_t numQueueProperties = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &numQueueProperties, nullptr);
             deviceInfo.queueProperties = std::vector<VkQueueFamilyProperties>(numQueueProperties);
@@ -175,10 +191,52 @@ static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
     return {};
 }
 
+static DeviceInfo createDevice(VkInstance instance, const PhysDeviceInfo &physDeviceInfo)
+{
+    if (!instance || !physDeviceInfo.device)
+    {
+        return {};
+    }
+
+    VkDeviceCreateInfo deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos(physDeviceInfo.queueProperties.size());
+    for (uint32_t i = 0; i < queueCreateInfos.size(); i++)
+    {
+        auto &createInfo = queueCreateInfos[i];
+        const auto &queueProperties = physDeviceInfo.queueProperties[i];
+        constexpr float queuePriority = 1.0f;
+
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        createInfo.queueCount = 1;
+        createInfo.queueFamilyIndex = i;
+        createInfo.pQueuePriorities = &queuePriority;
+    }
+
+    deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
+    deviceCreateInfo.queueCreateInfoCount = queueCreateInfos.size();
+    deviceCreateInfo.pEnabledFeatures = &physDeviceInfo.deviceFeatures;
+
+    DeviceInfo deviceInfo = {};
+    VK_LOG_ERR(vkCreateDevice(physDeviceInfo.device, &deviceCreateInfo, nullptr, &deviceInfo.device));
+
+    deviceInfo.queues.resize(physDeviceInfo.queueProperties.size());
+    for (uint32_t i = 0; i < physDeviceInfo.queueProperties.size(); i++)
+    {
+        deviceInfo.queues[i].queueFamilyIdx = i;
+        deviceInfo.queues[i].queueIdx = 0;
+        vkGetDeviceQueue(deviceInfo.device, i, 0, &deviceInfo.queues[i].queue);
+    }
+
+    return deviceInfo;
+}
+
 int main()
 {
     VkInstance instance = createInstance();
     PhysDeviceInfo physDeviceInfo = getPhysicalDevice(instance);
+    DeviceInfo deviceInfo = createDevice(instance, physDeviceInfo);
+
 #ifndef NDEBUG
     VkDebugUtilsMessengerEXT messenger = createDebugMessenger(instance);
 #endif
@@ -187,6 +245,7 @@ int main()
     destroyDebugMessenger(instance, messenger);
 #endif
 
+    vkDestroyDevice(deviceInfo.device, nullptr);
     vkDestroyInstance(instance, nullptr);
     return 0;
 }
