@@ -4,4 +4,5 @@ add_executable(pararay
 
 target_link_libraries(pararay
     vulkan
+    glfw
 )

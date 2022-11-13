@@ -6,6 +6,6 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortBlocksOnASingleLine: Never
 BreakBeforeBraces: Allman
 NamespaceIndentation: All
-ColumnLimit: 144
+ColumnLimit: 160
 BreakConstructorInitializers: BeforeComma
 ...
