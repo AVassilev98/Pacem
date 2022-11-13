@@ -1,0 +1,11 @@
+---
+BasedOnStyle: LLVM
+AllowShortFunctionsOnASingleLine: None
+IndentWidth: '4'
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Never
+BreakBeforeBraces: Allman
+NamespaceIndentation: All
+ColumnLimit: 144
+BreakConstructorInitializers: BeforeComma
+...
