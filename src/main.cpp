@@ -173,12 +173,24 @@ struct DeviceInfo
 {
     VkDevice device;
     std::vector<QueueInfo> queues;
+    uint32_t presentQueueFamily;
+    uint32_t graphicsQueueFamily;
+    uint32_t transferQueueFamily;
 };
 
 struct SwapchainInfo
 {
     VkSwapchainKHR swapchain;
     uint32_t numImages;
+    uint32_t height;
+    uint32_t width;
+};
+
+struct ImageGroupInfo
+{
+    std::vector<VkImage> images;
+    std::vector<VkImageView> imageViews;
+    std::vector<VkFramebuffer> frameBuffers;
 };
 
 static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
@@ -280,7 +292,7 @@ static WindowInfo createWindow(VkInstance instance, const PhysDeviceInfo &physDe
     return windowInfo;
 }
 
-static DeviceInfo createDevice(VkInstance instance, const PhysDeviceInfo &physDeviceInfo)
+static DeviceInfo createDevice(VkInstance instance, const PhysDeviceInfo &physDeviceInfo, const WindowInfo &windowInfo)
 {
     if (!instance || !physDeviceInfo.device)
     {
@@ -320,6 +332,38 @@ static DeviceInfo createDevice(VkInstance instance, const PhysDeviceInfo &physDe
         deviceInfo.queues[i].queueIdx = 0;
         deviceInfo.queues[i].queueProperties = physDeviceInfo.queueProperties[i];
         vkGetDeviceQueue(deviceInfo.device, i, 0, &deviceInfo.queues[i].queue);
+    }
+
+    for (uint32_t i = 0; i < deviceInfo.queues.size(); i++)
+    {
+        if (deviceInfo.queues[i].queueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            deviceInfo.graphicsQueueFamily = i;
+            deviceInfo.transferQueueFamily = i;
+            break;
+        }
+    }
+
+    for (uint32_t i = 0; i < deviceInfo.queues.size(); i++)
+    {
+        if (deviceInfo.queues[i].queueProperties.queueFlags & VK_QUEUE_TRANSFER_BIT &&
+            !(deviceInfo.queues[i].queueProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+        {
+            deviceInfo.transferQueueFamily = i;
+            break;
+        }
+    }
+
+    for (uint32_t i = 0; i < deviceInfo.queues.size(); i++)
+    {
+        VkBool32 presentSupport = VK_FALSE;
+        VK_LOG_ERR(vkGetPhysicalDeviceSurfaceSupportKHR(physDeviceInfo.device, i, windowInfo.surface, &presentSupport));
+
+        if (presentSupport == VK_TRUE)
+        {
+            deviceInfo.presentQueueFamily = i;
+            break;
+        }
     }
 
     return deviceInfo;
@@ -366,27 +410,225 @@ static SwapchainInfo createSwapchain(DeviceInfo &deviceInfo, const WindowInfo &w
 
     SwapchainInfo swapchainInfo = {};
     swapchainInfo.numImages = swapchainCreateInfo.minImageCount;
+    swapchainInfo.height = swapchainCreateInfo.imageExtent.height;
+    swapchainInfo.width = swapchainCreateInfo.imageExtent.width;
     VK_LOG_ERR(vkCreateSwapchainKHR(deviceInfo.device, &swapchainCreateInfo, nullptr, &swapchainInfo.swapchain));
 
     return swapchainInfo;
 }
 
-static VkRenderPass createRenderPass(VkDevice device)
+static VkRenderPass createRenderPass(const DeviceInfo &deviceInfo, const WindowInfo &windowInfo)
 {
-    if (!device)
+    if (!deviceInfo.device || !windowInfo.window || !windowInfo.surface)
     {
         return nullptr;
     }
 
+    VkAttachmentDescription attachmentDescription = {};
+    attachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    attachmentDescription.format = windowInfo.preferredSurfaceFormat.format;
+    attachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkAttachmentReference colorAttachmentReference = {};
+    colorAttachmentReference.attachment = 0;
+    colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpassDescription = {};
+    subpassDescription.colorAttachmentCount = 1;
+    subpassDescription.pColorAttachments = &colorAttachmentReference;
+    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
     VkRenderPassCreateInfo renderPassCreateInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+    renderPassCreateInfo.attachmentCount = 1;
+    renderPassCreateInfo.pAttachments = &attachmentDescription;
+    renderPassCreateInfo.subpassCount = 1;
+    renderPassCreateInfo.pSubpasses = &subpassDescription;
 
-    VkAttachmentDescription attachmentDescription;
-    // attachmentDescription.flags
+    VkRenderPass renderPass = nullptr;
+    vkCreateRenderPass(deviceInfo.device, &renderPassCreateInfo, nullptr, &renderPass);
+    return renderPass;
+}
 
-    // VkRenderPass renderPass = nullptr;
-    // vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass)
+static VkPipelineLayout createPipelineLayout(const DeviceInfo &deviceInfo)
+{
+    if (!deviceInfo.device)
+    {
+        return nullptr;
+    }
 
-    return nullptr;
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pipelineLayoutCreateInfo.setLayoutCount = 0;
+    pipelineLayoutCreateInfo.pSetLayouts = nullptr;
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+    pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
+
+    VkPipelineLayout pipelineLayout = nullptr;
+    VK_LOG_ERR(vkCreatePipelineLayout(deviceInfo.device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+    return pipelineLayout;
+}
+
+static ImageGroupInfo getSwapChainImages(const DeviceInfo &deviceInfo, const WindowInfo &windowInfo, const SwapchainInfo &swapchainInfo,
+                                         const VkRenderPass renderPass)
+{
+    if (!deviceInfo.device || !windowInfo.window || !windowInfo.surface || !swapchainInfo.swapchain)
+    {
+        return {};
+    }
+
+    ImageGroupInfo swapchainImages = {};
+
+    uint32_t swapchainImageCount = 0;
+    VK_LOG_ERR(vkGetSwapchainImagesKHR(deviceInfo.device, swapchainInfo.swapchain, &swapchainImageCount, nullptr));
+    swapchainImages.images = std::vector<VkImage>(swapchainImageCount);
+    swapchainImages.imageViews = std::vector<VkImageView>(swapchainImageCount);
+    swapchainImages.frameBuffers = std::vector<VkFramebuffer>(swapchainImageCount);
+    VK_LOG_ERR(vkGetSwapchainImagesKHR(deviceInfo.device, swapchainInfo.swapchain, &swapchainImageCount, swapchainImages.images.data()));
+
+    VkImageSubresourceRange subResourceRange;
+    subResourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subResourceRange.baseArrayLayer = 0;
+    subResourceRange.baseMipLevel = 0;
+    subResourceRange.layerCount = 1;
+    subResourceRange.levelCount = 1;
+
+    for (uint32_t i = 0; i < swapchainImageCount; i++)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        imageViewCreateInfo.image = swapchainImages.images[i];
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = windowInfo.preferredSurfaceFormat.format;
+        imageViewCreateInfo.subresourceRange = subResourceRange;
+
+        VK_LOG_ERR(vkCreateImageView(deviceInfo.device, &imageViewCreateInfo, nullptr, &swapchainImages.imageViews[i]));
+    }
+
+    for (uint32_t i = 0; i < swapchainImageCount; i++)
+    {
+        VkFramebufferCreateInfo framebufferCreateInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        framebufferCreateInfo.renderPass = renderPass;
+        framebufferCreateInfo.attachmentCount = 1;
+        framebufferCreateInfo.pAttachments = &swapchainImages.imageViews[i];
+        framebufferCreateInfo.width = swapchainInfo.width;
+        framebufferCreateInfo.height = swapchainInfo.height;
+        framebufferCreateInfo.layers = 1;
+
+        VK_LOG_ERR(vkCreateFramebuffer(deviceInfo.device, &framebufferCreateInfo, nullptr, &swapchainImages.frameBuffers[i]));
+    }
+
+    return swapchainImages;
+}
+
+static VkCommandPool createCommandPool(const DeviceInfo &deviceInfo)
+{
+    VkCommandPoolCreateInfo commandPoolCreateInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    commandPoolCreateInfo.queueFamilyIndex = deviceInfo.graphicsQueueFamily;
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    VkCommandPool commandPool = nullptr;
+    VK_LOG_ERR(vkCreateCommandPool(deviceInfo.device, &commandPoolCreateInfo, nullptr, &commandPool));
+    return commandPool;
+}
+
+struct RenderContext
+{
+    std::vector<VkSemaphore> imgAvailableSem;
+    std::vector<VkSemaphore> renderDoneSem;
+    std::vector<VkFence> fences;
+    std::vector<VkCommandPool> commandPools;
+};
+
+VkCommandBuffer createCommandBuffer(const DeviceInfo &deviceInfo, VkCommandPool commandPool)
+{
+    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    commandBufferAllocateInfo.commandPool = commandPool;
+    commandBufferAllocateInfo.commandBufferCount = 1;
+    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkCommandBuffer commandBuffer = nullptr;
+    VK_LOG_ERR(vkAllocateCommandBuffers(deviceInfo.device, &commandBufferAllocateInfo, &commandBuffer));
+    return commandBuffer;
+}
+
+static RenderContext createRenderContext(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, VkCommandPool commandPool)
+{
+    VkSemaphoreCreateInfo semaphoreCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+
+    VkFenceCreateInfo fenceCreateInfo = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    RenderContext renderContext = {};
+    renderContext.commandPools.resize(swapchainInfo.numImages);
+    renderContext.imgAvailableSem.resize(swapchainInfo.numImages);
+    renderContext.renderDoneSem.resize(swapchainInfo.numImages);
+    renderContext.fences.resize(swapchainInfo.numImages);
+
+    for (uint32_t i = 0; i < swapchainInfo.numImages; i++)
+    {
+        renderContext.commandPools[i] = createCommandPool(deviceInfo);
+        VK_LOG_ERR(vkCreateSemaphore(deviceInfo.device, &semaphoreCreateInfo, nullptr, &renderContext.imgAvailableSem[i]));
+        VK_LOG_ERR(vkCreateSemaphore(deviceInfo.device, &semaphoreCreateInfo, nullptr, &renderContext.renderDoneSem[i]));
+        VK_LOG_ERR(vkCreateFence(deviceInfo.device, &fenceCreateInfo, nullptr, &renderContext.fences[i]));
+    }
+
+    return renderContext;
+}
+
+void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
+               VkRenderPass renderPass, uint32_t frameNum)
+{
+    uint32_t frameIdx = frameNum % swapchainInfo.numImages;
+
+    VK_LOG_ERR(vkWaitForFences(deviceInfo.device, 1, &renderContext.fences[frameIdx], VK_TRUE, UINT64_MAX));
+    VK_LOG_ERR(vkResetFences(deviceInfo.device, 1, &renderContext.fences[frameIdx]));
+
+    VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    VkRect2D renderArea = {};
+    renderArea.extent = {swapchainInfo.width, swapchainInfo.height};
+    renderPassBeginInfo.renderArea = renderArea;
+    renderPassBeginInfo.renderPass = renderPass;
+
+    VkClearValue clearValue = {0.0f, 0.0f, 1.0f, 1.0f};
+    renderPassBeginInfo.clearValueCount = 1;
+    renderPassBeginInfo.pClearValues = &clearValue;
+
+    renderPassBeginInfo.framebuffer = swapChainImages.frameBuffers[frameIdx];
+
+    VkCommandBuffer commandBuffer = createCommandBuffer(deviceInfo, renderContext.commandPools[frameIdx]);
+
+    VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    VK_LOG_ERR(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
+    VkSubpassContents subpassContents = {};
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, subpassContents);
+    vkCmdEndRenderPass(commandBuffer);
+    VK_LOG_ERR(vkEndCommandBuffer(commandBuffer));
+
+    uint32_t imageIndex = 0;
+    VK_LOG_ERR(vkAcquireNextImageKHR(deviceInfo.device, swapchainInfo.swapchain, UINT64_MAX, renderContext.imgAvailableSem[frameIdx], nullptr, &imageIndex));
+
+    VkPipelineStageFlags waitDstStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &renderContext.imgAvailableSem[frameIdx];
+    submitInfo.pWaitDstStageMask = &waitDstStageFlags;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &renderContext.renderDoneSem[frameIdx];
+
+    VK_LOG_ERR(vkQueueSubmit(deviceInfo.queues[deviceInfo.graphicsQueueFamily].queue, 1, &submitInfo, renderContext.fences[frameIdx]));
+
+    VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &renderContext.renderDoneSem[frameIdx];
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &swapchainInfo.swapchain;
+    presentInfo.pImageIndices = &imageIndex;
+    VK_LOG_ERR(vkQueuePresentKHR(deviceInfo.queues[deviceInfo.presentQueueFamily].queue, &presentInfo));
 }
 
 int main()
@@ -397,18 +639,37 @@ int main()
         return -1;
     }
     VkInstance instance = createInstance();
-    PhysDeviceInfo physDeviceInfo = getPhysicalDevice(instance);
-    WindowInfo windowInfo = createWindow(instance, physDeviceInfo);
-    DeviceInfo deviceInfo = createDevice(instance, physDeviceInfo);
-
 #ifndef NDEBUG
     VkDebugUtilsMessengerEXT messenger = createDebugMessenger(instance);
 #endif
 
+    PhysDeviceInfo physDeviceInfo = getPhysicalDevice(instance);
+    WindowInfo windowInfo = createWindow(instance, physDeviceInfo);
+    DeviceInfo deviceInfo = createDevice(instance, physDeviceInfo, windowInfo);
     SwapchainInfo swapchainInfo = createSwapchain(deviceInfo, windowInfo);
+    VkPipelineLayout pipelineLayout = createPipelineLayout(deviceInfo);
+    VkRenderPass renderPass = createRenderPass(deviceInfo, windowInfo);
+    ImageGroupInfo swapChainImages = getSwapChainImages(deviceInfo, windowInfo, swapchainInfo, renderPass);
+
+    VkCommandPool commandPool = createCommandPool(deviceInfo);
+    RenderContext renderContext = createRenderContext(deviceInfo, swapchainInfo, commandPool);
+
+    double lastTime = glfwGetTime();
+    int nbFrames = 0;
 
     while (!glfwWindowShouldClose(windowInfo.window))
     {
+        drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames);
+
+        double currentTime = glfwGetTime();
+        nbFrames++;
+        if (currentTime - lastTime >= 1.0)
+        {
+            printf("%f ms/frame\n", 1000.0 / double(nbFrames));
+            nbFrames = 0;
+            lastTime += 1.0;
+        }
+
         glfwPollEvents();
     }
 
