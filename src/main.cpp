@@ -9,6 +9,9 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
+// #define VMA_IMPLEMENTATION
+// #include "vk_mem_alloc.h"
+
 #ifndef NDEBUG
 #define VK_LOG_ERR(f_)                                                                                                                                         \
     {                                                                                                                                                          \
@@ -450,7 +453,7 @@ static VkRenderPass createRenderPass(const DeviceInfo &deviceInfo, const WindowI
     renderPassCreateInfo.pSubpasses = &subpassDescription;
 
     VkRenderPass renderPass = nullptr;
-    vkCreateRenderPass(deviceInfo.device, &renderPassCreateInfo, nullptr, &renderPass);
+    VK_LOG_ERR(vkCreateRenderPass(deviceInfo.device, &renderPassCreateInfo, nullptr, &renderPass));
     return renderPass;
 }
 
@@ -523,11 +526,23 @@ static ImageGroupInfo getSwapChainImages(const DeviceInfo &deviceInfo, const Win
     return swapchainImages;
 }
 
+void freeSwapchainImages(const VkDevice device, ImageGroupInfo &swapchainImages)
+{
+    for (auto &fb : swapchainImages.frameBuffers)
+    {
+        vkDestroyFramebuffer(device, fb, nullptr);
+    }
+    for (auto &iv : swapchainImages.imageViews)
+    {
+        vkDestroyImageView(device, iv, nullptr);
+    }
+}
+
 static VkCommandPool createCommandPool(const DeviceInfo &deviceInfo)
 {
     VkCommandPoolCreateInfo commandPoolCreateInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     commandPoolCreateInfo.queueFamilyIndex = deviceInfo.graphicsQueueFamily;
-    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     VkCommandPool commandPool = nullptr;
     VK_LOG_ERR(vkCreateCommandPool(deviceInfo.device, &commandPoolCreateInfo, nullptr, &commandPool));
@@ -540,6 +555,7 @@ struct RenderContext
     std::vector<VkSemaphore> renderDoneSem;
     std::vector<VkFence> fences;
     std::vector<VkCommandPool> commandPools;
+    std::vector<VkCommandBuffer> commandBuffers;
 };
 
 VkCommandBuffer createCommandBuffer(const DeviceInfo &deviceInfo, VkCommandPool commandPool)
@@ -554,7 +570,7 @@ VkCommandBuffer createCommandBuffer(const DeviceInfo &deviceInfo, VkCommandPool 
     return commandBuffer;
 }
 
-static RenderContext createRenderContext(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, VkCommandPool commandPool)
+static RenderContext createRenderContext(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo)
 {
     VkSemaphoreCreateInfo semaphoreCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 
@@ -563,6 +579,7 @@ static RenderContext createRenderContext(const DeviceInfo &deviceInfo, const Swa
 
     RenderContext renderContext = {};
     renderContext.commandPools.resize(swapchainInfo.numImages);
+    renderContext.commandBuffers.resize(swapchainInfo.numImages);
     renderContext.imgAvailableSem.resize(swapchainInfo.numImages);
     renderContext.renderDoneSem.resize(swapchainInfo.numImages);
     renderContext.fences.resize(swapchainInfo.numImages);
@@ -570,12 +587,38 @@ static RenderContext createRenderContext(const DeviceInfo &deviceInfo, const Swa
     for (uint32_t i = 0; i < swapchainInfo.numImages; i++)
     {
         renderContext.commandPools[i] = createCommandPool(deviceInfo);
+        renderContext.commandBuffers[i] = createCommandBuffer(deviceInfo, renderContext.commandPools[i]);
         VK_LOG_ERR(vkCreateSemaphore(deviceInfo.device, &semaphoreCreateInfo, nullptr, &renderContext.imgAvailableSem[i]));
         VK_LOG_ERR(vkCreateSemaphore(deviceInfo.device, &semaphoreCreateInfo, nullptr, &renderContext.renderDoneSem[i]));
         VK_LOG_ERR(vkCreateFence(deviceInfo.device, &fenceCreateInfo, nullptr, &renderContext.fences[i]));
     }
 
     return renderContext;
+}
+
+void destroyRenderContext(const VkDevice device, RenderContext &renderContext)
+{
+    for (unsigned i = 0; i < renderContext.commandBuffers.size(); i++)
+    {
+        auto &cmdBuf = renderContext.commandBuffers[i];
+        vkFreeCommandBuffers(device, renderContext.commandPools[i], 1, &cmdBuf);
+    }
+    for (auto &cmdPool : renderContext.commandPools)
+    {
+        vkDestroyCommandPool(device, cmdPool, nullptr);
+    }
+    for (auto &sem : renderContext.imgAvailableSem)
+    {
+        vkDestroySemaphore(device, sem, nullptr);
+    }
+    for (auto &sem : renderContext.renderDoneSem)
+    {
+        vkDestroySemaphore(device, sem, nullptr);
+    }
+    for (auto &fence : renderContext.fences)
+    {
+        vkDestroyFence(device, fence, nullptr);
+    }
 }
 
 void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
@@ -592,20 +635,18 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = renderPass;
 
-    VkClearValue clearValue = {0.0f, 0.0f, 1.0f, 1.0f};
+    VkClearValue clearValue = {0.0f, 1.0f, 0.0f, 1.0f};
     renderPassBeginInfo.clearValueCount = 1;
     renderPassBeginInfo.pClearValues = &clearValue;
 
     renderPassBeginInfo.framebuffer = swapChainImages.frameBuffers[frameIdx];
 
-    VkCommandBuffer commandBuffer = createCommandBuffer(deviceInfo, renderContext.commandPools[frameIdx]);
-
     VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    VK_LOG_ERR(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
+    VK_LOG_ERR(vkBeginCommandBuffer(renderContext.commandBuffers[frameIdx], &commandBufferBeginInfo));
     VkSubpassContents subpassContents = {};
-    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, subpassContents);
-    vkCmdEndRenderPass(commandBuffer);
-    VK_LOG_ERR(vkEndCommandBuffer(commandBuffer));
+    vkCmdBeginRenderPass(renderContext.commandBuffers[frameIdx], &renderPassBeginInfo, subpassContents);
+    vkCmdEndRenderPass(renderContext.commandBuffers[frameIdx]);
+    VK_LOG_ERR(vkEndCommandBuffer(renderContext.commandBuffers[frameIdx]));
 
     uint32_t imageIndex = 0;
     VK_LOG_ERR(vkAcquireNextImageKHR(deviceInfo.device, swapchainInfo.swapchain, UINT64_MAX, renderContext.imgAvailableSem[frameIdx], nullptr, &imageIndex));
@@ -616,7 +657,7 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     submitInfo.pWaitSemaphores = &renderContext.imgAvailableSem[frameIdx];
     submitInfo.pWaitDstStageMask = &waitDstStageFlags;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.pCommandBuffers = &renderContext.commandBuffers[frameIdx];
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &renderContext.renderDoneSem[frameIdx];
 
@@ -650,9 +691,7 @@ int main()
     VkPipelineLayout pipelineLayout = createPipelineLayout(deviceInfo);
     VkRenderPass renderPass = createRenderPass(deviceInfo, windowInfo);
     ImageGroupInfo swapChainImages = getSwapChainImages(deviceInfo, windowInfo, swapchainInfo, renderPass);
-
-    VkCommandPool commandPool = createCommandPool(deviceInfo);
-    RenderContext renderContext = createRenderContext(deviceInfo, swapchainInfo, commandPool);
+    RenderContext renderContext = createRenderContext(deviceInfo, swapchainInfo);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
@@ -676,7 +715,13 @@ int main()
 #ifndef NDEBUG
     destroyDebugMessenger(instance, messenger);
 #endif
+    // wait for device to idle before destroying vulkan objects
+    vkDeviceWaitIdle(deviceInfo.device);
 
+    destroyRenderContext(deviceInfo.device, renderContext);
+    freeSwapchainImages(deviceInfo.device, swapChainImages);
+    vkDestroyRenderPass(deviceInfo.device, renderPass, nullptr);
+    vkDestroyPipelineLayout(deviceInfo.device, pipelineLayout, nullptr);
     vkDestroySwapchainKHR(deviceInfo.device, swapchainInfo.swapchain, nullptr);
     vkDestroySurfaceKHR(instance, windowInfo.surface, nullptr);
     vkDestroyDevice(deviceInfo.device, nullptr);
