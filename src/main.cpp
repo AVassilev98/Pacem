@@ -12,8 +12,8 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
-// #define VMA_IMPLEMENTATION
-// #include "vk_mem_alloc.h"
+#define VMA_IMPLEMENTATION
+#include "vma.h"
 
 #ifndef NDEBUG
 #define VK_LOG_ERR(f_)                                                                                                                                         \
@@ -638,7 +638,7 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = renderPass;
 
-    VkClearValue clearValue = {0.0f, 1.0f, 0.0f, 1.0f};
+    VkClearValue clearValue = {0.4f, 0.4f, 0.4f, 1.0f};
     renderPassBeginInfo.clearValueCount = 1;
     renderPassBeginInfo.pClearValues = &clearValue;
 
@@ -809,6 +809,24 @@ VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, 
     return pipeline;
 }
 
+VmaAllocator createVmaAllocator(const VkInstance instance, const VkPhysicalDevice physicalDevice, const VkDevice device)
+{
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocatorCreateInfo = {};
+    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocatorCreateInfo.physicalDevice = physicalDevice;
+    allocatorCreateInfo.device = device;
+    allocatorCreateInfo.instance = instance;
+    allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+
+    VmaAllocator allocator;
+    VK_LOG_ERR(vmaCreateAllocator(&allocatorCreateInfo, &allocator));
+    return allocator;
+}
+
 int main()
 {
     std::filesystem::path selfPath = std::filesystem::read_symlink("/proc/self/exe");
@@ -827,6 +845,7 @@ int main()
     PhysDeviceInfo physDeviceInfo = getPhysicalDevice(instance);
     WindowInfo windowInfo = createWindow(instance, physDeviceInfo);
     DeviceInfo deviceInfo = createDevice(instance, physDeviceInfo, windowInfo);
+    VmaAllocator allocator = createVmaAllocator(instance, physDeviceInfo.device, deviceInfo.device);
     SwapchainInfo swapchainInfo = createSwapchain(deviceInfo, windowInfo);
     VkPipelineLayout pipelineLayout = createPipelineLayout(deviceInfo);
     VkRenderPass renderPass = createRenderPass(deviceInfo, windowInfo);
@@ -848,7 +867,7 @@ int main()
     double lastTime = glfwGetTime();
     int nbFrames = 0;
 
-    while (true)
+    while (!glfwWindowShouldClose(windowInfo.window))
     {
         drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline);
 
@@ -871,11 +890,15 @@ int main()
     vkDeviceWaitIdle(deviceInfo.device);
 
     destroyRenderContext(deviceInfo.device, renderContext);
+    vkDestroyShaderModule(deviceInfo.device, vertexShader, nullptr);
+    vkDestroyShaderModule(deviceInfo.device, fragmentShader, nullptr);
+    vkDestroyPipeline(deviceInfo.device, pipeline, nullptr);
     freeSwapchainImages(deviceInfo.device, swapChainImages);
     vkDestroyRenderPass(deviceInfo.device, renderPass, nullptr);
     vkDestroyPipelineLayout(deviceInfo.device, pipelineLayout, nullptr);
     vkDestroySwapchainKHR(deviceInfo.device, swapchainInfo.swapchain, nullptr);
     vkDestroySurfaceKHR(instance, windowInfo.surface, nullptr);
+    vmaDestroyAllocator(allocator);
     vkDestroyDevice(deviceInfo.device, nullptr);
     vkDestroyInstance(instance, nullptr);
     glfwTerminate();
