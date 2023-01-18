@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstdio>
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 #include "array"
@@ -6,6 +7,8 @@
 #include "iostream"
 #include "vector"
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
@@ -622,7 +625,7 @@ void destroyRenderContext(const VkDevice device, RenderContext &renderContext)
 }
 
 void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
-               VkRenderPass renderPass, uint32_t frameNum)
+               VkRenderPass renderPass, uint32_t frameNum, VkPipeline pipeline)
 {
     uint32_t frameIdx = frameNum % swapchainInfo.numImages;
 
@@ -645,6 +648,8 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     VK_LOG_ERR(vkBeginCommandBuffer(renderContext.commandBuffers[frameIdx], &commandBufferBeginInfo));
     VkSubpassContents subpassContents = {};
     vkCmdBeginRenderPass(renderContext.commandBuffers[frameIdx], &renderPassBeginInfo, subpassContents);
+    vkCmdBindPipeline(renderContext.commandBuffers[frameIdx], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdDraw(renderContext.commandBuffers[frameIdx], 3, 1, 0, 0);
     vkCmdEndRenderPass(renderContext.commandBuffers[frameIdx]);
     VK_LOG_ERR(vkEndCommandBuffer(renderContext.commandBuffers[frameIdx]));
 
@@ -672,8 +677,143 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     VK_LOG_ERR(vkQueuePresentKHR(deviceInfo.queues[deviceInfo.presentQueueFamily].queue, &presentInfo));
 }
 
+VkShaderModule loadShaderModule(const VkDevice device, const char *filePath)
+{
+    std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open())
+    {
+        return nullptr;
+    }
+
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
+    file.seekg(0);
+    file.read((char *)buffer.data(), fileSize);
+    file.close();
+
+    VkShaderModuleCreateInfo shaderModuleCreateInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    shaderModuleCreateInfo.codeSize = fileSize;
+    shaderModuleCreateInfo.pCode = buffer.data();
+
+    VkShaderModule shaderModule;
+    VK_LOG_ERR(vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule));
+    return shaderModule;
+}
+
+VkPipelineShaderStageCreateInfo getShaderStageCreateInfo(VkShaderModule shader, VkShaderStageFlagBits stage)
+{
+    VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    pipelineShaderStageCreateInfo.stage = stage;
+    pipelineShaderStageCreateInfo.module = shader;
+    pipelineShaderStageCreateInfo.pName = "main";
+
+    return pipelineShaderStageCreateInfo;
+}
+
+VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, const VkPipelineLayout pipelineLayout,
+                          const std::vector<VkPipelineShaderStageCreateInfo> &shaders, WindowInfo &window)
+{
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
+    vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    inputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineTessellationStateCreateInfo tesselationCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
+
+    int windowWidth = 0;
+    int windowHeight = 0;
+    glfwGetWindowSize(window.window, &windowWidth, &windowHeight);
+
+    VkViewport viewport;
+    viewport.height = windowHeight;
+    viewport.width = windowWidth;
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 0.0f;
+
+    VkRect2D scissor;
+    scissor.offset = {0, 0};
+    scissor.extent = {(uint32_t)windowWidth, (uint32_t)windowHeight};
+
+    // TODO: Get viewports
+    VkPipelineViewportStateCreateInfo viewportCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewportCreateInfo.viewportCount = 1;
+    viewportCreateInfo.pViewports = &viewport;
+    viewportCreateInfo.scissorCount = 1;
+    viewportCreateInfo.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rasterCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterCreateInfo.cullMode = VK_CULL_MODE_NONE;
+    rasterCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterCreateInfo.lineWidth = 1.0f;
+    rasterCreateInfo.depthBiasEnable = VK_FALSE;
+    rasterCreateInfo.depthBiasConstantFactor = 0.0f;
+    rasterCreateInfo.depthBiasClamp = 0.0f;
+    rasterCreateInfo.depthBiasSlopeFactor = 0.0f;
+
+    VkPipelineMultisampleStateCreateInfo MSAACreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    MSAACreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    MSAACreateInfo.minSampleShading = 1.0f;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depthStencilCreateInfo.depthTestEnable = VK_FALSE;
+    depthStencilCreateInfo.depthWriteEnable = VK_FALSE;
+    depthStencilCreateInfo.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+    depthStencilCreateInfo.depthBoundsTestEnable = VK_FALSE;
+    depthStencilCreateInfo.minDepthBounds = 0.0f;
+    depthStencilCreateInfo.maxDepthBounds = 1.0f;
+    depthStencilCreateInfo.stencilTestEnable = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
+    colorBlendAttachmentState.blendEnable = VK_FALSE;
+    colorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo colorBlendCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    colorBlendCreateInfo.logicOpEnable = VK_FALSE;
+    colorBlendCreateInfo.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendCreateInfo.attachmentCount = 1;
+    colorBlendCreateInfo.pAttachments = &colorBlendAttachmentState;
+
+    VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamicStateCreateInfo.dynamicStateCount = 0;
+    dynamicStateCreateInfo.pDynamicStates = nullptr;
+
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    pipelineCreateInfo.stageCount = shaders.size();
+    pipelineCreateInfo.pStages = shaders.data();
+    pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
+    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
+    pipelineCreateInfo.pTessellationState = &tesselationCreateInfo;
+    pipelineCreateInfo.pViewportState = &viewportCreateInfo;
+    pipelineCreateInfo.pRasterizationState = &rasterCreateInfo;
+    pipelineCreateInfo.pMultisampleState = &MSAACreateInfo;
+    pipelineCreateInfo.pDepthStencilState = &depthStencilCreateInfo;
+    pipelineCreateInfo.pColorBlendState = &colorBlendCreateInfo;
+    pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
+    pipelineCreateInfo.layout = pipelineLayout;
+    pipelineCreateInfo.renderPass = renderPass;
+    pipelineCreateInfo.subpass = 0;
+    pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineCreateInfo.basePipelineHandle = 0;
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VK_LOG_ERR(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, VK_NULL_HANDLE, &pipeline));
+    return pipeline;
+}
+
 int main()
 {
+    std::filesystem::path selfPath = std::filesystem::read_symlink("/proc/self/exe");
+    std::filesystem::path selfDir = selfPath.parent_path();
+
     if (glfwInit() != GLFW_TRUE)
     {
         std::cerr << "Could not init glfw" << std::endl;
@@ -693,12 +833,24 @@ int main()
     ImageGroupInfo swapChainImages = getSwapChainImages(deviceInfo, windowInfo, swapchainInfo, renderPass);
     RenderContext renderContext = createRenderContext(deviceInfo, swapchainInfo);
 
+    std::string vertShaderPath = selfDir.string() + "/shaders/triangle.vert.spv";
+    std::string fragShaderPath = selfDir.string() + "/shaders/triangle.frag.spv";
+
+    VkShaderModule vertexShader = loadShaderModule(deviceInfo.device, vertShaderPath.c_str());
+    VkShaderModule fragmentShader = loadShaderModule(deviceInfo.device, fragShaderPath.c_str());
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaders = {};
+    shaders.push_back(getShaderStageCreateInfo(vertexShader, VK_SHADER_STAGE_VERTEX_BIT));
+    shaders.push_back(getShaderStageCreateInfo(fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT));
+
+    VkPipeline pipeline = createPipeline(deviceInfo.device, renderPass, pipelineLayout, shaders, windowInfo);
+
     double lastTime = glfwGetTime();
     int nbFrames = 0;
 
-    while (!glfwWindowShouldClose(windowInfo.window))
+    while (true)
     {
-        drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames);
+        drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline);
 
         double currentTime = glfwGetTime();
         nbFrames++;
