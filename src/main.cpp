@@ -1,3 +1,4 @@
+#include "meshLoader.h"
 #include <cstdint>
 #include <cstdio>
 #define GLFW_INCLUDE_VULKAN
@@ -9,24 +10,13 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
 #define VMA_IMPLEMENTATION
 #include "vma.h"
 
-#ifndef NDEBUG
-#define VK_LOG_ERR(f_)                                                                                                                                         \
-    {                                                                                                                                                          \
-        VkResult retCode = f_;                                                                                                                                 \
-        if (retCode != VK_SUCCESS)                                                                                                                             \
-        {                                                                                                                                                      \
-            std::cerr << string_VkResult(retCode) << " Returned from " << __FUNCTION__ << " in " << __FILE__ << ":" << __LINE__ << std::endl;                  \
-        }                                                                                                                                                      \
-    }
-#else
-#define VK_LOG_ERR(f_) f_
-#endif
+#include "common.h"
+#include "types.h"
 
 static VkBool32 message(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
@@ -146,58 +136,6 @@ static VkInstance createInstance()
     VK_LOG_ERR(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
     return instance;
 }
-
-struct WindowInfo
-{
-    GLFWwindow *window;
-    VkSurfaceKHR surface;
-    VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    std::vector<VkSurfaceFormatKHR> surfaceFormats;
-    std::vector<VkPresentModeKHR> presentModes;
-
-    VkSurfaceFormatKHR preferredSurfaceFormat = {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
-    VkPresentModeKHR preferredPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-};
-
-struct PhysDeviceInfo
-{
-    VkPhysicalDevice device;
-    VkPhysicalDeviceProperties deviceProperties;
-    VkPhysicalDeviceFeatures deviceFeatures;
-    std::vector<VkQueueFamilyProperties> queueProperties;
-};
-
-struct QueueInfo
-{
-    VkQueue queue;
-    VkQueueFamilyProperties queueProperties;
-    uint32_t queueFamilyIdx;
-    uint32_t queueIdx;
-};
-
-struct DeviceInfo
-{
-    VkDevice device;
-    std::vector<QueueInfo> queues;
-    uint32_t presentQueueFamily;
-    uint32_t graphicsQueueFamily;
-    uint32_t transferQueueFamily;
-};
-
-struct SwapchainInfo
-{
-    VkSwapchainKHR swapchain;
-    uint32_t numImages;
-    uint32_t height;
-    uint32_t width;
-};
-
-struct ImageGroupInfo
-{
-    std::vector<VkImage> images;
-    std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> frameBuffers;
-};
 
 static PhysDeviceInfo getPhysicalDevice(VkInstance instance)
 {
@@ -624,8 +562,8 @@ void destroyRenderContext(const VkDevice device, RenderContext &renderContext)
     }
 }
 
-void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
-               VkRenderPass renderPass, uint32_t frameNum, VkPipeline pipeline)
+VkResult drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
+                   VkRenderPass renderPass, uint32_t frameNum, VkPipeline pipeline, const WindowInfo &window)
 {
     uint32_t frameIdx = frameNum % swapchainInfo.numImages;
 
@@ -642,10 +580,28 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     renderPassBeginInfo.clearValueCount = 1;
     renderPassBeginInfo.pClearValues = &clearValue;
 
+    int windowWidth = 0;
+    int windowHeight = 0;
+    glfwGetWindowSize(window.window, &windowWidth, &windowHeight);
+
+    VkViewport viewport;
+    viewport.height = windowHeight;
+    viewport.width = windowWidth;
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 0.0f;
+
+    VkRect2D scissor;
+    scissor.offset = {0, 0};
+    scissor.extent = {(uint32_t)windowWidth, (uint32_t)windowHeight};
+
     renderPassBeginInfo.framebuffer = swapChainImages.frameBuffers[frameIdx];
 
     VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     VK_LOG_ERR(vkBeginCommandBuffer(renderContext.commandBuffers[frameIdx], &commandBufferBeginInfo));
+    vkCmdSetViewport(renderContext.commandBuffers[frameIdx], 0, 1, &viewport);
+    vkCmdSetScissor(renderContext.commandBuffers[frameIdx], 0, 1, &scissor);
     VkSubpassContents subpassContents = {};
     vkCmdBeginRenderPass(renderContext.commandBuffers[frameIdx], &renderPassBeginInfo, subpassContents);
     vkCmdBindPipeline(renderContext.commandBuffers[frameIdx], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -674,7 +630,7 @@ void drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo,
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &swapchainInfo.swapchain;
     presentInfo.pImageIndices = &imageIndex;
-    VK_LOG_ERR(vkQueuePresentKHR(deviceInfo.queues[deviceInfo.presentQueueFamily].queue, &presentInfo));
+    return vkQueuePresentKHR(deviceInfo.queues[deviceInfo.presentQueueFamily].queue, &presentInfo);
 }
 
 VkShaderModule loadShaderModule(const VkDevice device, const char *filePath)
@@ -712,7 +668,7 @@ VkPipelineShaderStageCreateInfo getShaderStageCreateInfo(VkShaderModule shader, 
 }
 
 VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, const VkPipelineLayout pipelineLayout,
-                          const std::vector<VkPipelineShaderStageCreateInfo> &shaders, WindowInfo &window)
+                          const std::vector<VkPipelineShaderStageCreateInfo> &shaders)
 {
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
@@ -726,28 +682,11 @@ VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, 
 
     VkPipelineTessellationStateCreateInfo tesselationCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
 
-    int windowWidth = 0;
-    int windowHeight = 0;
-    glfwGetWindowSize(window.window, &windowWidth, &windowHeight);
-
-    VkViewport viewport;
-    viewport.height = windowHeight;
-    viewport.width = windowWidth;
-    viewport.x = 0;
-    viewport.y = 0;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 0.0f;
-
-    VkRect2D scissor;
-    scissor.offset = {0, 0};
-    scissor.extent = {(uint32_t)windowWidth, (uint32_t)windowHeight};
-
-    // TODO: Get viewports
     VkPipelineViewportStateCreateInfo viewportCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewportCreateInfo.viewportCount = 1;
-    viewportCreateInfo.pViewports = &viewport;
+    viewportCreateInfo.pViewports = nullptr;
     viewportCreateInfo.scissorCount = 1;
-    viewportCreateInfo.pScissors = &scissor;
+    viewportCreateInfo.pScissors = nullptr;
 
     VkPipelineRasterizationStateCreateInfo rasterCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rasterCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
@@ -782,9 +721,11 @@ VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, 
     colorBlendCreateInfo.attachmentCount = 1;
     colorBlendCreateInfo.pAttachments = &colorBlendAttachmentState;
 
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+
     VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-    dynamicStateCreateInfo.dynamicStateCount = 0;
-    dynamicStateCreateInfo.pDynamicStates = nullptr;
+    dynamicStateCreateInfo.dynamicStateCount = ARR_CNT(dynamicStates);
+    dynamicStateCreateInfo.pDynamicStates = dynamicStates;
 
     VkGraphicsPipelineCreateInfo pipelineCreateInfo = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     pipelineCreateInfo.stageCount = shaders.size();
@@ -816,7 +757,7 @@ VmaAllocator createVmaAllocator(const VkInstance instance, const VkPhysicalDevic
     vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
 
     VmaAllocatorCreateInfo allocatorCreateInfo = {};
-    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_0;
     allocatorCreateInfo.physicalDevice = physicalDevice;
     allocatorCreateInfo.device = device;
     allocatorCreateInfo.instance = instance;
@@ -825,6 +766,57 @@ VmaAllocator createVmaAllocator(const VkInstance instance, const VkPhysicalDevic
     VmaAllocator allocator;
     VK_LOG_ERR(vmaCreateAllocator(&allocatorCreateInfo, &allocator));
     return allocator;
+}
+
+TransferQueue createTransferQueue(const DeviceInfo &deviceInfo)
+{
+    TransferQueue transferQueue = {};
+
+    VkCommandPoolCreateInfo commandPoolCreateInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    commandPoolCreateInfo.queueFamilyIndex = deviceInfo.transferQueueFamily;
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    VkCommandPool transferPool;
+    VK_LOG_ERR(vkCreateCommandPool(deviceInfo.device, &commandPoolCreateInfo, nullptr, &transferPool));
+
+    VkCommandBufferAllocateInfo commandBufferAllocInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    commandBufferAllocInfo.commandPool = transferPool;
+    commandBufferAllocInfo.commandBufferCount = 2;
+    commandBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkCommandBuffer cmdBufs[2] = {};
+    VK_LOG_ERR(vkAllocateCommandBuffers(deviceInfo.device, &commandBufferAllocInfo, cmdBufs));
+
+    transferQueue.commandPool = transferPool;
+    transferQueue.immCmdBuf = cmdBufs[0];
+    transferQueue.eofCmdBuf = cmdBufs[1];
+    for (const auto &queueInfo : deviceInfo.queues)
+    {
+        if (deviceInfo.transferQueueFamily == queueInfo.queueFamilyIdx)
+        {
+            transferQueue.queue = queueInfo.queue;
+        }
+    }
+    return transferQueue;
+}
+
+void transferImmediate(const TransferQueue &queue, Uploadable upload, VkBufferCopy copyInfo)
+{
+    VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    vkBeginCommandBuffer(queue.immCmdBuf, &commandBufferBeginInfo);
+    vkCmdCopyBuffer(queue.immCmdBuf, upload.bufferPair.first, upload.bufferPair.second, 1, &copyInfo);
+    vkEndCommandBuffer(queue.immCmdBuf);
+
+    VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &queue.immCmdBuf;
+
+    vkQueueSubmit(queue.queue, 1, &submitInfo, nullptr);
+    vkQueueWaitIdle(queue.queue);
+}
+
+void transferEndOfFrame(TransferQueue &queue)
+{
 }
 
 int main()
@@ -852,24 +844,44 @@ int main()
     ImageGroupInfo swapChainImages = getSwapChainImages(deviceInfo, windowInfo, swapchainInfo, renderPass);
     RenderContext renderContext = createRenderContext(deviceInfo, swapchainInfo);
 
+    TransferQueue transferQueue = createTransferQueue(deviceInfo);
+
     std::string vertShaderPath = selfDir.string() + "/shaders/triangle.vert.spv";
     std::string fragShaderPath = selfDir.string() + "/shaders/triangle.frag.spv";
+    std::string suzannePath = selfDir.string() + "/resources/suzanne.obj";
 
     VkShaderModule vertexShader = loadShaderModule(deviceInfo.device, vertShaderPath.c_str());
     VkShaderModule fragmentShader = loadShaderModule(deviceInfo.device, fragShaderPath.c_str());
+    Mesh suzanneMesh = loadMesh(suzannePath, transferQueue, allocator, deviceInfo);
 
     std::vector<VkPipelineShaderStageCreateInfo> shaders = {};
     shaders.push_back(getShaderStageCreateInfo(vertexShader, VK_SHADER_STAGE_VERTEX_BIT));
     shaders.push_back(getShaderStageCreateInfo(fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT));
 
-    VkPipeline pipeline = createPipeline(deviceInfo.device, renderPass, pipelineLayout, shaders, windowInfo);
+    VkPipeline pipeline = createPipeline(deviceInfo.device, renderPass, pipelineLayout, shaders);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
 
     while (!glfwWindowShouldClose(windowInfo.window))
     {
-        drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline);
+        // int minimized = glfwGetWindowAttrib(windowInfo.window, GLFW);
+
+        VkResult drawStatus = drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline, windowInfo);
+        if (drawStatus == VK_ERROR_OUT_OF_DATE_KHR || drawStatus == VK_SUBOPTIMAL_KHR)
+        {
+            auto newSwapchainInfo = createSwapchain(deviceInfo, windowInfo, swapchainInfo.swapchain);
+            auto newSwapChainImages = getSwapChainImages(deviceInfo, windowInfo, newSwapchainInfo, renderPass);
+            vkDeviceWaitIdle(deviceInfo.device);
+            freeSwapchainImages(deviceInfo.device, swapChainImages);
+            vkDestroySwapchainKHR(deviceInfo.device, swapchainInfo.swapchain, nullptr);
+            swapchainInfo = newSwapchainInfo;
+            swapChainImages = newSwapChainImages;
+        }
+        else
+        {
+            VK_LOG_ERR(drawStatus);
+        }
 
         double currentTime = glfwGetTime();
         nbFrames++;

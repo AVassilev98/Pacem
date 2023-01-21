@@ -61,6 +61,10 @@ if(NOT glm_FOUND)
     FetchContent_Populate(glm)
     add_subdirectory(${glm_SOURCE_DIR} ${glm_BINARY_DIR})
   endif()
+
+  include_directories(${glm_SOURCE_DIR})
+  include_directories(${glm_BINARY_DIR})
+
 endif()
 
 set(BUILD_SHARED_LIBS FALSE CACHE BOOL "x" FORCE)
@@ -97,11 +101,13 @@ endif()
 
 add_executable(pararay
     src/main.cpp
+    src/meshLoader.cpp
 )
 
 target_link_libraries(pararay
     vulkan
     glfw
+    assimp
 )
 
 set(SHADER_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
@@ -140,4 +146,32 @@ foreach(source IN LISTS SHADERS)
 endforeach()
 
 add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS})
+add_dependencies(pararay shaders)
 
+set(RESOURCE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+set(RESOURCE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/resources)
+add_custom_command(
+  COMMAND
+    ${CMAKE_COMMAND} -E make_directory ${RESOURCE_BINARY_DIR}
+  OUTPUT ${RESOURCE_BINARY_DIR}
+  COMMENT "Creating ${RESOURCE_BINARY_DIR}"
+)
+
+message(${RESOURCE_SOURCE_DIR})
+
+file(GLOB RESOURCES
+  ${RESOURCE_SOURCE_DIR}/*.obj)
+
+foreach(mesh IN LISTS RESOURCES)
+  get_filename_component(FILENAME ${mesh} NAME)
+  add_custom_command(
+    COMMAND ${CMAKE_COMMAND} -E copy ${mesh} ${RESOURCE_BINARY_DIR}/${FILENAME}
+    DEPENDS ${RESOURCE_BINARY_DIR} ${mesh}
+    OUTPUT ${RESOURCE_BINARY_DIR}/${FILENAME}
+    COMMENT "Copying ${FILENAME}"
+  )
+  list(APPEND CP_RESOURCES ${RESOURCE_BINARY_DIR}/${FILENAME})
+endforeach()
+
+add_custom_target(resources ALL DEPENDS ${CP_RESOURCES})
+add_dependencies(pararay resources)
