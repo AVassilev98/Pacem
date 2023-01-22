@@ -6,6 +6,7 @@
 #include <vulkan/vulkan_core.h>
 
 Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllocator &allocator, DeviceInfo &deviceInfo);
+void freeMesh(Mesh &mesh, VmaAllocator);
 void transferImmediate(const TransferQueue &queue, Uploadable upload, VkBufferCopy copyInfo);
 template <typename T>
 AllocatedBuffer uploadBuffer(VmaAllocator allocator, std::vector<T> &cpuBuf, const DeviceInfo &deviceInfo, VkBufferUsageFlags usage, TransferQueue &queue)

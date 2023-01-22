@@ -56,7 +56,7 @@ struct Vertex
 struct Mesh
 {
     std::vector<Vertex> vertices;
-    std::vector<glm::vec3> faces;
+    std::vector<glm::u32vec3> faces;
     AllocatedBuffer vkVertexBuffer;
     AllocatedBuffer vkIndexBuffer;
 };

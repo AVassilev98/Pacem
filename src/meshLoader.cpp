@@ -1,5 +1,6 @@
 #include "assimp/mesh.h"
 #include "assimp/types.h"
+#include "glm/gtx/string_cast.hpp"
 #include "meshLoader.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -7,7 +8,6 @@
 #include <iostream>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
-
 static Assimp::Importer g_importer;
 
 template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::vec3 toGlmVec3(const T &elem)
@@ -15,15 +15,10 @@ template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::ve
     return glm::vec3(elem[0], elem[1], elem[2]);
 }
 
-// static AllocatedBuffer uploadIndexBuffer(const VmaAllocator &allocator, const VkDevice device, const std::vector<glm::vec3> &vertices)
-// {
-//     VkBufferCreateInfo bufferCreateInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-//     bufferCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-// }
-
-// static AllocatedBuffer uploadVertexBuffer(const VmaAllocator &allocator, const VkDevice device, const std::vector<Vertex> &vertices)
-// {
-// }
+template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::vec3 toU32GlmVec3(const T &elem)
+{
+    return glm::u32vec3(elem[0], elem[1], elem[2]);
+}
 
 Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllocator &allocator, DeviceInfo &deviceInfo)
 {
@@ -75,10 +70,17 @@ Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllo
 
         for (size_t j = 0; j < mesh->mNumFaces; j++)
         {
-            importedMesh.faces.emplace_back(toGlmVec3(mesh->mFaces[j].mIndices));
+            importedMesh.faces.emplace_back(toU32GlmVec3(mesh->mFaces[j].mIndices));
         }
     }
 
-    uploadBuffer(allocator, importedMesh.vertices, deviceInfo, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, transferQueue);
+    importedMesh.vkVertexBuffer = uploadBuffer(allocator, importedMesh.vertices, deviceInfo, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, transferQueue);
+    importedMesh.vkIndexBuffer = uploadBuffer(allocator, importedMesh.faces, deviceInfo, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, transferQueue);
     return std::move(importedMesh);
+}
+
+void freeMesh(Mesh &mesh, VmaAllocator allocator)
+{
+    vmaDestroyBuffer(allocator, mesh.vkVertexBuffer.buffer, mesh.vkVertexBuffer.allocation);
+    vmaDestroyBuffer(allocator, mesh.vkIndexBuffer.buffer, mesh.vkIndexBuffer.allocation);
 }

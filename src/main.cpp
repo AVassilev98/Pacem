@@ -563,7 +563,7 @@ void destroyRenderContext(const VkDevice device, RenderContext &renderContext)
 }
 
 VkResult drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainInfo, const RenderContext &renderContext, const ImageGroupInfo &swapChainImages,
-                   VkRenderPass renderPass, uint32_t frameNum, VkPipeline pipeline, const WindowInfo &window)
+                   VkRenderPass renderPass, uint32_t frameNum, VkPipeline pipeline, const WindowInfo &window, Mesh &mesh)
 {
     uint32_t frameIdx = frameNum % swapchainInfo.numImages;
 
@@ -576,7 +576,7 @@ VkResult drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainI
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = renderPass;
 
-    VkClearValue clearValue = {0.4f, 0.4f, 0.4f, 1.0f};
+    VkClearValue clearValue = {0.6f, 0.1f, 0.6f, 1.0f};
     renderPassBeginInfo.clearValueCount = 1;
     renderPassBeginInfo.pClearValues = &clearValue;
 
@@ -605,7 +605,12 @@ VkResult drawFrame(const DeviceInfo &deviceInfo, const SwapchainInfo &swapchainI
     VkSubpassContents subpassContents = {};
     vkCmdBeginRenderPass(renderContext.commandBuffers[frameIdx], &renderPassBeginInfo, subpassContents);
     vkCmdBindPipeline(renderContext.commandBuffers[frameIdx], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdDraw(renderContext.commandBuffers[frameIdx], 3, 1, 0, 0);
+
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(renderContext.commandBuffers[frameIdx], 0, 1, &mesh.vkVertexBuffer.buffer, &offset);
+    vkCmdBindIndexBuffer(renderContext.commandBuffers[frameIdx], mesh.vkIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(renderContext.commandBuffers[frameIdx], mesh.faces.size() * 3, 1, 0, 0, 0);
+
     vkCmdEndRenderPass(renderContext.commandBuffers[frameIdx]);
     VK_LOG_ERR(vkEndCommandBuffer(renderContext.commandBuffers[frameIdx]));
 
@@ -670,11 +675,32 @@ VkPipelineShaderStageCreateInfo getShaderStageCreateInfo(VkShaderModule shader, 
 VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, const VkPipelineLayout pipelineLayout,
                           const std::vector<VkPipelineShaderStageCreateInfo> &shaders)
 {
+    VkVertexInputBindingDescription vertexInputBindingDescription = {};
+    vertexInputBindingDescription.binding = 0;
+    vertexInputBindingDescription.stride = sizeof(Vertex);
+    vertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription vertexAttributes[3] = {};
+    vertexAttributes[0].binding = 0;
+    vertexAttributes[0].location = 0;
+    vertexAttributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    vertexAttributes[0].offset = offsetof(Vertex, position);
+
+    vertexAttributes[1].binding = 0;
+    vertexAttributes[1].location = 1;
+    vertexAttributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    vertexAttributes[1].offset = offsetof(Vertex, normal);
+
+    vertexAttributes[2].binding = 0;
+    vertexAttributes[2].location = 2;
+    vertexAttributes[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+    vertexAttributes[2].offset = offsetof(Vertex, color);
+
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-    vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+    vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+    vertexInputCreateInfo.pVertexBindingDescriptions = &vertexInputBindingDescription;
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = 3;
+    vertexInputCreateInfo.pVertexAttributeDescriptions = vertexAttributes;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     inputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -708,7 +734,7 @@ VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, 
     depthStencilCreateInfo.depthCompareOp = VK_COMPARE_OP_ALWAYS;
     depthStencilCreateInfo.depthBoundsTestEnable = VK_FALSE;
     depthStencilCreateInfo.minDepthBounds = 0.0f;
-    depthStencilCreateInfo.maxDepthBounds = 1.0f;
+    depthStencilCreateInfo.maxDepthBounds = 10.0f;
     depthStencilCreateInfo.stencilTestEnable = VK_FALSE;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
@@ -800,6 +826,14 @@ TransferQueue createTransferQueue(const DeviceInfo &deviceInfo)
     return transferQueue;
 }
 
+void destroyTransferQueue(const DeviceInfo &deviceInfo, TransferQueue &transferQueue)
+{
+
+    vkFreeCommandBuffers(deviceInfo.device, transferQueue.commandPool, 1, &transferQueue.immCmdBuf);
+    vkFreeCommandBuffers(deviceInfo.device, transferQueue.commandPool, 1, &transferQueue.eofCmdBuf);
+    vkDestroyCommandPool(deviceInfo.device, transferQueue.commandPool, nullptr);
+}
+
 void transferImmediate(const TransferQueue &queue, Uploadable upload, VkBufferCopy copyInfo)
 {
     VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -813,10 +847,6 @@ void transferImmediate(const TransferQueue &queue, Uploadable upload, VkBufferCo
 
     vkQueueSubmit(queue.queue, 1, &submitInfo, nullptr);
     vkQueueWaitIdle(queue.queue);
-}
-
-void transferEndOfFrame(TransferQueue &queue)
-{
 }
 
 int main()
@@ -867,7 +897,7 @@ int main()
     {
         // int minimized = glfwGetWindowAttrib(windowInfo.window, GLFW);
 
-        VkResult drawStatus = drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline, windowInfo);
+        VkResult drawStatus = drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline, windowInfo, suzanneMesh);
         if (drawStatus == VK_ERROR_OUT_OF_DATE_KHR || drawStatus == VK_SUBOPTIMAL_KHR)
         {
             auto newSwapchainInfo = createSwapchain(deviceInfo, windowInfo, swapchainInfo.swapchain);
@@ -900,6 +930,9 @@ int main()
 #endif
     // wait for device to idle before destroying vulkan objects
     vkDeviceWaitIdle(deviceInfo.device);
+
+    freeMesh(suzanneMesh, allocator);
+    destroyTransferQueue(deviceInfo, transferQueue);
 
     destroyRenderContext(deviceInfo.device, renderContext);
     vkDestroyShaderModule(deviceInfo.device, vertexShader, nullptr);
