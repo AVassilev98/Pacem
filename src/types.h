@@ -1,6 +1,7 @@
 #pragma once
 #include "GLFW/glfw3.h"
 #include "vma.h"
+#include <glm/glm.hpp>
 #include <glm/vec3.hpp>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -15,6 +16,13 @@ struct WindowInfo
 
     VkSurfaceFormatKHR preferredSurfaceFormat = {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
     VkPresentModeKHR preferredPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+};
+
+struct MVP
+{
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 projection;
 };
 
 struct PhysDeviceInfo
@@ -35,6 +43,10 @@ struct SwapchainInfo
 
 struct ImageGroupInfo
 {
+    std::vector<VkImage> msaaImages;
+    std::vector<VkImageView> msaaImageViews;
+    std::vector<VmaAllocation> msaaImageAllocations;
+
     std::vector<VkImage> images;
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> frameBuffers;
@@ -59,6 +71,18 @@ struct Mesh
     std::vector<glm::u32vec3> faces;
     AllocatedBuffer vkVertexBuffer;
     AllocatedBuffer vkIndexBuffer;
+    std::vector<VkDeviceSize> meshletVertexOffsets;
+    std::vector<VkDeviceSize> meshletIndexOffsets;
+    std::vector<VkDeviceSize> meshletIndexSizes;
+
+    void drawMesh(VkCommandBuffer cmdBuf);
+};
+
+struct DepthBuffer
+{
+    VkImage depthBuf;
+    VmaAllocation imageAlloc;
+    VkImageView depthView;
 };
 
 struct Uploadable

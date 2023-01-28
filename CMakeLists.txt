@@ -160,9 +160,10 @@ add_custom_command(
 message(${RESOURCE_SOURCE_DIR})
 
 file(GLOB RESOURCES
-  ${RESOURCE_SOURCE_DIR}/*.obj)
+  ${RESOURCE_SOURCE_DIR}/*.obj
+  ${RESOURCE_SOURCE_DIR}/*.ply)
 
-foreach(mesh IN LISTS RESOURCES)
+foreach(mesh IN LISTS RESOURCES) 
   get_filename_component(FILENAME ${mesh} NAME)
   add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${mesh} ${RESOURCE_BINARY_DIR}/${FILENAME}

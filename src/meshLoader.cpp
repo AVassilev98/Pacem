@@ -23,13 +23,18 @@ template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::ve
 Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllocator &allocator, DeviceInfo &deviceInfo)
 {
     std::cout << "Loading mesh: " << filePath << std::endl;
-    const aiScene *scene =
-        g_importer.ReadFile(filePath, aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+    const aiScene *scene = g_importer.ReadFile(filePath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+
+    if (!scene)
+    {
+        std::cout << "Import Failed: " << g_importer.GetErrorString() << std::endl;
+    }
 
     Mesh importedMesh;
-
     size_t totalVertexCount = 0;
     size_t totalFaceCount = 0;
+    size_t meshletVertexOffset = 0;
+    size_t meshletIndexOffset = 0;
     for (size_t i = 0; i < scene->mNumMeshes; i++)
     {
         aiMesh *mesh = scene->mMeshes[i];
@@ -37,6 +42,9 @@ Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllo
         totalFaceCount += mesh->mNumFaces;
     }
 
+    importedMesh.meshletVertexOffsets.reserve(scene->mNumMeshes);
+    importedMesh.meshletIndexOffsets.reserve(scene->mNumMeshes);
+    importedMesh.meshletIndexSizes.reserve(scene->mNumMeshes);
     importedMesh.vertices.reserve(totalVertexCount);
     importedMesh.faces.reserve(totalFaceCount);
 
@@ -46,9 +54,16 @@ Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllo
         const uint32_t matIdx = mesh->mMaterialIndex;
         const aiMaterial *mat = scene->mMaterials[matIdx];
 
+        importedMesh.meshletVertexOffsets.push_back(meshletVertexOffset);
+        importedMesh.meshletIndexOffsets.push_back(meshletIndexOffset);
+        importedMesh.meshletIndexSizes.push_back(mesh->mNumFaces * 3);
+
+        meshletIndexOffset += mesh->mNumFaces * 3;
+        meshletVertexOffset += mesh->mNumVertices;
+
         aiColor3D matColor;
         mat->Get(AI_MATKEY_COLOR_DIFFUSE, matColor);
-        glm::vec3 diffuseColor = toGlmVec3(matColor);
+        glm::vec3 diffuseColor = glm::vec3(0.2588f, 0.2588f, 0.961f); // toGlmVec3(matColor);
 
         for (size_t j = 0; j < mesh->mNumVertices; j++)
         {
@@ -83,4 +98,16 @@ void freeMesh(Mesh &mesh, VmaAllocator allocator)
 {
     vmaDestroyBuffer(allocator, mesh.vkVertexBuffer.buffer, mesh.vkVertexBuffer.allocation);
     vmaDestroyBuffer(allocator, mesh.vkIndexBuffer.buffer, mesh.vkIndexBuffer.allocation);
+}
+
+void Mesh::drawMesh(VkCommandBuffer cmdBuf)
+{
+    VkDeviceSize offset = 0;
+    vkCmdBindIndexBuffer(cmdBuf, vkIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vkVertexBuffer.buffer, &offset);
+
+    for (uint32_t i = 0; i < meshletVertexOffsets.size(); i++)
+    {
+        vkCmdDrawIndexed(cmdBuf, meshletIndexSizes[i], 1, meshletIndexOffsets[i], meshletVertexOffsets[i], 0);
+    }
 }
