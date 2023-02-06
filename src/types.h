@@ -3,8 +3,11 @@
 #include "vma.h"
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
+#include <string>
+#include <unordered_map>
 #include <vector>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 struct WindowInfo
 {
@@ -63,19 +66,46 @@ struct Vertex
     glm::vec3 position;
     glm::vec3 normal;
     glm::vec3 color;
+    glm::vec2 textureCoordinate;
+};
+
+struct Texture
+{
+    VkImage image;
+    VmaAllocation allocation;
+    VkImageView imageView;
+};
+
+struct PushConstants
+{
+    glm::mat4 M;
+    glm::mat4 V;
+    glm::mat4 P;
 };
 
 struct Mesh
 {
+    VkSampler sampler;
+
+    // Total Mesh Buffer
     std::vector<Vertex> vertices;
     std::vector<glm::u32vec3> faces;
     AllocatedBuffer vkVertexBuffer;
     AllocatedBuffer vkIndexBuffer;
+
+    // Per Submesh
     std::vector<VkDeviceSize> meshletVertexOffsets;
     std::vector<VkDeviceSize> meshletIndexOffsets;
     std::vector<VkDeviceSize> meshletIndexSizes;
+    std::vector<VkDeviceSize> matIndex;
 
-    void drawMesh(VkCommandBuffer cmdBuf);
+    // All Textures
+    std::unordered_map<std::string, Texture> textures;
+
+    // Per Material
+    std::vector<VkDescriptorSet> matDescriptorSets;
+
+    void drawMesh(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout);
 };
 
 struct DepthBuffer
@@ -85,29 +115,28 @@ struct DepthBuffer
     VkImageView depthView;
 };
 
-struct Uploadable
+struct UploadableBuffer
 {
-    enum class Type
-    {
-        Buffer,
-        Image,
-    };
+    VkBuffer src;
+    VkBuffer dst;
+};
 
-    Type uploadType;
-    union
-    {
-        std::pair<VkBuffer, VkBuffer> bufferPair;
-        std::pair<VkImage, VkImage> imagePair;
-    };
+struct UploadableTexture
+{
+    VkBuffer src;
+    VkImage dst;
 };
 
 struct TransferQueue
 {
-    VkQueue queue;
-    VkCommandPool commandPool;
+    VkQueue transferQueue;
+    VkQueue graphicsQueue;
+    VkCommandPool transferCommandPool;
+    VkCommandPool graphicsCommandPool;
     VkCommandBuffer immCmdBuf;
     VkCommandBuffer eofCmdBuf;
-    std::vector<Uploadable> transfers;
+    VkCommandBuffer graphicsCmdBuf;
+    std::vector<UploadableBuffer> transfers;
 };
 
 struct QueueInfo

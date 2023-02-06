@@ -1,13 +1,22 @@
 #pragma once
+#include "assimp/mesh.h"
+#include "assimp/texture.h"
+#include "assimp/types.h"
 #include "common.h"
 #include "stdio.h"
 #include "types.h"
 #include <string>
 #include <vulkan/vulkan_core.h>
 
-Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllocator &allocator, DeviceInfo &deviceInfo);
-void freeMesh(Mesh &mesh, VmaAllocator);
-void transferImmediate(const TransferQueue &queue, Uploadable upload, VkBufferCopy copyInfo);
+Mesh loadMesh(const std::string &filePath, TransferQueue &transferQueue, VmaAllocator &allocator, DeviceInfo &deviceInfo, VkDescriptorPool descriptorPool,
+              VkDescriptorSetLayout descriptorSetLayout);
+Texture uploadTexture(uint32_t width, uint32_t height, uint32_t numComponents, void *texels, TransferQueue &transferQueue, VmaAllocator allocator,
+                      DeviceInfo &deviceInfo, VkFormat imageFormat);
+void freeMesh(Mesh &mesh, VkDevice device, VmaAllocator allocator, VkDescriptorPool descriptorPool);
+void transferBufferImmediate(const TransferQueue &queue, UploadableBuffer &upload, VkBufferCopy &copyInfo);
+VkDescriptorSet createDescriptorSet(VkDevice device, VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout);
+void updatePerMeshDescriptor(VkDevice device, VkDescriptorSet descriptorSet, VkDescriptorImageInfo &imageInfo, uint32_t binding);
+VkSampler createSampler(VkDevice device);
 template <typename T>
 AllocatedBuffer uploadBuffer(VmaAllocator allocator, std::vector<T> &cpuBuf, const DeviceInfo &deviceInfo, VkBufferUsageFlags usage, TransferQueue &queue)
 {
@@ -46,16 +55,16 @@ AllocatedBuffer uploadBuffer(VmaAllocator allocator, std::vector<T> &cpuBuf, con
     VmaAllocationInfo gpuAllocInfo;
     VK_LOG_ERR(vmaCreateBuffer(allocator, &gpuBufferInfo, &vmagpuBufAllocInfo, &gpuBuf, &gpuAlloc, &gpuAllocInfo));
 
-    Uploadable uploadable = {};
-    uploadable.uploadType = Uploadable::Type::Buffer;
-    uploadable.bufferPair = std::pair<VkBuffer, VkBuffer>(stagingBuf, gpuBuf);
+    UploadableBuffer uploadable = {};
+    uploadable.src = stagingBuf;
+    uploadable.dst = gpuBuf;
 
     VkBufferCopy bufferCopy;
     bufferCopy.srcOffset = 0;
     bufferCopy.dstOffset = 0;
     bufferCopy.size = bufferSize;
 
-    transferImmediate(queue, uploadable, bufferCopy);
+    transferBufferImmediate(queue, uploadable, bufferCopy);
     vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
 
     AllocatedBuffer retBuf = {};

@@ -161,7 +161,9 @@ message(${RESOURCE_SOURCE_DIR})
 
 file(GLOB RESOURCES
   ${RESOURCE_SOURCE_DIR}/*.obj
-  ${RESOURCE_SOURCE_DIR}/*.ply)
+  ${RESOURCE_SOURCE_DIR}/*.ply
+  ${RESOURCE_SOURCE_DIR}/*.glb
+  ${RESOURCE_SOURCE_DIR}/*.gltf)
 
 foreach(mesh IN LISTS RESOURCES) 
   get_filename_component(FILENAME ${mesh} NAME)
