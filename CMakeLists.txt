@@ -103,6 +103,7 @@ add_executable(pararay
     src/main.cpp
     src/meshLoader.cpp
     src/renderer.cpp
+    src/vkinit.cpp
 )
 
 target_link_libraries(pararay

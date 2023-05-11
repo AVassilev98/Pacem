@@ -5,6 +5,8 @@
 
 class Renderer
 {
+    friend class VkInit;
+
   public:
     static Renderer &Get();
     VkResult draw(Mesh &mesh, VkPipeline pipeline);
