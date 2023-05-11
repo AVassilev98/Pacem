@@ -102,6 +102,7 @@ endif()
 add_executable(pararay
     src/main.cpp
     src/meshLoader.cpp
+    src/renderer.cpp
 )
 
 target_link_libraries(pararay
@@ -139,7 +140,6 @@ foreach(source IN LISTS SHADERS)
     COMMAND
       ${glslc_executable} -o ${SHADER_BINARY_DIR}/${FILENAME}.spv ${source}
     OUTPUT ${SHADER_BINARY_DIR}/${FILENAME}.spv
-    DEPENDS ${SHADER_BINARY_DIR} ${source}
     COMMENT "Compiling ${FILENAME}"
   )
   list(APPEND SPV_SHADERS ${SHADER_BINARY_DIR}/${FILENAME}.spv)
@@ -165,11 +165,11 @@ file(GLOB RESOURCES
   ${RESOURCE_SOURCE_DIR}/*.glb
   ${RESOURCE_SOURCE_DIR}/*.gltf)
 
-foreach(mesh IN LISTS RESOURCES) 
+foreach(mesh IN LISTS RESOURCES)
+  message(${mesh})
   get_filename_component(FILENAME ${mesh} NAME)
   add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${mesh} ${RESOURCE_BINARY_DIR}/${FILENAME}
-    DEPENDS ${RESOURCE_BINARY_DIR} ${mesh}
     OUTPUT ${RESOURCE_BINARY_DIR}/${FILENAME}
     COMMENT "Copying ${FILENAME}"
   )

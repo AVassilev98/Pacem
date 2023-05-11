@@ -20,3 +20,20 @@ constexpr unsigned numPreferredImages = 3;
 #else
 #define VK_LOG_ERR(f_) f_
 #endif
+
+#define VK_LOG_ERR_FATAL(f_)                                                                                                                                   \
+    {                                                                                                                                                          \
+        VkResult retCode = f_;                                                                                                                                 \
+        if (retCode != VK_SUCCESS)                                                                                                                             \
+        {                                                                                                                                                      \
+            throw std::invalid_argument(string_VkResult(retCode) + " Returned from " + __FUNCTION__ + " in " + __FILE__ + ":" + __LINE__ + std::endl);         \
+        }                                                                                                                                                      \
+    }
+
+#define LOG_ERR_FATAL(cond)                                                                                                                                    \
+    {                                                                                                                                                          \
+        if (!cond)                                                                                                                                             \
+        {                                                                                                                                                      \
+            throw std::invalid_argument(std::string(#cond) + " Returned from " + __FUNCTION__ + " in " + __FILE__ + ":" + __LINE__ + std::endl);               \
+        }                                                                                                                                                      \
+    }

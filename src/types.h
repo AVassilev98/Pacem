@@ -155,3 +155,12 @@ struct DeviceInfo
     uint32_t graphicsQueueFamily;
     uint32_t transferQueueFamily;
 };
+
+struct RenderContext
+{
+    std::vector<VkSemaphore> imgAvailableSem;
+    std::vector<VkSemaphore> renderDoneSem;
+    std::vector<VkFence> fences;
+    std::vector<VkCommandPool> commandPools;
+    std::vector<VkCommandBuffer> commandBuffers;
+};
