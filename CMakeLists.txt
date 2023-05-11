@@ -104,6 +104,7 @@ add_executable(pararay
     src/meshLoader.cpp
     src/renderer.cpp
     src/vkinit.cpp
+    src/shader.cpp
 )
 
 target_link_libraries(pararay
@@ -134,6 +135,7 @@ add_custom_command(
   OUTPUT ${SHADER_BINARY_DIR}
   COMMENT "Creating ${SHADER_BINARY_DIR}"
 )
+target_compile_definitions(pararay PUBLIC SHADER_PATH="${SHADER_BINARY_DIR}/")
 
 foreach(source IN LISTS SHADERS)
   get_filename_component(FILENAME ${source} NAME)
@@ -150,32 +152,7 @@ add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS})
 add_dependencies(pararay shaders)
 
 set(RESOURCE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
-set(RESOURCE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/resources)
-add_custom_command(
-  COMMAND
-    ${CMAKE_COMMAND} -E make_directory ${RESOURCE_BINARY_DIR}
-  OUTPUT ${RESOURCE_BINARY_DIR}
-  COMMENT "Creating ${RESOURCE_BINARY_DIR}"
-)
-
-message(${RESOURCE_SOURCE_DIR})
-
-file(GLOB RESOURCES
-  ${RESOURCE_SOURCE_DIR}/*.obj
-  ${RESOURCE_SOURCE_DIR}/*.ply
-  ${RESOURCE_SOURCE_DIR}/*.glb
-  ${RESOURCE_SOURCE_DIR}/*.gltf)
-
-foreach(mesh IN LISTS RESOURCES)
-  message(${mesh})
-  get_filename_component(FILENAME ${mesh} NAME)
-  add_custom_command(
-    COMMAND ${CMAKE_COMMAND} -E copy ${mesh} ${RESOURCE_BINARY_DIR}/${FILENAME}
-    OUTPUT ${RESOURCE_BINARY_DIR}/${FILENAME}
-    COMMENT "Copying ${FILENAME}"
-  )
-  list(APPEND CP_RESOURCES ${RESOURCE_BINARY_DIR}/${FILENAME})
-endforeach()
+target_compile_definitions(pararay PUBLIC ASSET_PATH="${RESOURCE_SOURCE_DIR}/")
 
 add_custom_target(resources ALL DEPENDS ${CP_RESOURCES})
 add_dependencies(pararay resources)

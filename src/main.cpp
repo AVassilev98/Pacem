@@ -23,39 +23,8 @@
 #include "renderer.h"
 #include "types.h"
 
-VkShaderModule loadShaderModule(const VkDevice device, const char *filePath)
-{
-    std::ifstream file(filePath, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open())
-    {
-        return nullptr;
-    }
-
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
-    file.seekg(0);
-    file.read((char *)buffer.data(), fileSize);
-    file.close();
-
-    VkShaderModuleCreateInfo shaderModuleCreateInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    shaderModuleCreateInfo.codeSize = fileSize;
-    shaderModuleCreateInfo.pCode = buffer.data();
-
-    VkShaderModule shaderModule;
-    VK_LOG_ERR(vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule));
-    return shaderModule;
-}
-
-VkPipelineShaderStageCreateInfo getShaderStageCreateInfo(VkShaderModule shader, VkShaderStageFlagBits stage)
-{
-    VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-    pipelineShaderStageCreateInfo.stage = stage;
-    pipelineShaderStageCreateInfo.module = shader;
-    pipelineShaderStageCreateInfo.pName = "main";
-
-    return pipelineShaderStageCreateInfo;
-}
+#include "shader.h"
+#include "vkinit.h"
 
 VkPipeline createPipeline(const VkDevice device, const VkRenderPass renderPass, const VkPipelineLayout pipelineLayout,
                           const std::vector<VkPipelineShaderStageCreateInfo> &shaders)
@@ -482,21 +451,23 @@ int main()
 
     Renderer &renderer = Renderer::Get();
 
-    std::string vertShaderPath = selfDir.string() + "/shaders/default.vert.spv";
-    std::string geoShaderPath = selfDir.string() + "/shaders/default.geom.spv";
-    std::string fragShaderPath = selfDir.string() + "/shaders/default.frag.spv";
-    std::string suzannePath = selfDir.string() + "/resources/DamagedHelmet.glb";
+    std::string vertShaderPath = CONCAT(SHADER_PATH, "default.vert.spv");
+    std::string geoShaderPath = CONCAT(SHADER_PATH, "default.geom.spv");
+    std::string fragShaderPath = CONCAT(SHADER_PATH, "default.frag.spv");
 
-    VkShaderModule vertexShader = loadShaderModule(renderer.m_deviceInfo.device, vertShaderPath.c_str());
-    VkShaderModule geometryShader = loadShaderModule(renderer.m_deviceInfo.device, geoShaderPath.c_str());
-    VkShaderModule fragmentShader = loadShaderModule(renderer.m_deviceInfo.device, fragShaderPath.c_str());
+    std::string suzannePath = CONCAT(ASSET_PATH, "DamagedHelmet.glb");
+
+    Shader vertShader(vertShaderPath, Shader::Stage::Vertex);
+    Shader geoShader(geoShaderPath, Shader::Stage::Geometry);
+    Shader fragShader(fragShaderPath, Shader::Stage::Fragment);
+
     Mesh suzanneMesh = loadMesh(suzannePath, renderer.m_transferQueue, renderer.m_vmaAllocator, renderer.m_deviceInfo, renderer.m_descriptorPool,
                                 renderer.m_descriptorSetLayout);
 
     std::vector<VkPipelineShaderStageCreateInfo> shaders = {};
-    shaders.push_back(getShaderStageCreateInfo(vertexShader, VK_SHADER_STAGE_VERTEX_BIT));
-    shaders.push_back(getShaderStageCreateInfo(geometryShader, VK_SHADER_STAGE_GEOMETRY_BIT));
-    shaders.push_back(getShaderStageCreateInfo(fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT));
+    shaders.push_back(VkInit::PipelineShaderStageCreateInfo(vertShader));
+    shaders.push_back(VkInit::PipelineShaderStageCreateInfo(geoShader));
+    shaders.push_back(VkInit::PipelineShaderStageCreateInfo(fragShader));
 
     VkPipeline pipeline = createPipeline(renderer.m_deviceInfo.device, renderer.m_renderPass, renderer.m_pipelineLayout, shaders);
 
@@ -528,9 +499,6 @@ int main()
     renderer.wait();
 
     freeMesh(suzanneMesh, renderer.m_deviceInfo.device, renderer.m_vmaAllocator, renderer.m_descriptorPool);
-    vkDestroyShaderModule(renderer.m_deviceInfo.device, vertexShader, nullptr);
-    vkDestroyShaderModule(renderer.m_deviceInfo.device, geometryShader, nullptr);
-    vkDestroyShaderModule(renderer.m_deviceInfo.device, fragmentShader, nullptr);
     vkDestroyPipeline(renderer.m_deviceInfo.device, pipeline, nullptr);
     return 0;
 }

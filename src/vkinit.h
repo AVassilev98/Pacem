@@ -1,5 +1,7 @@
 #pragma once
+#include "vulkan/vulkan.h"
 
-class VkInit
+struct VkInit
 {
+    static VkPipelineShaderStageCreateInfo PipelineShaderStageCreateInfo(const class Shader &shader);
 };
