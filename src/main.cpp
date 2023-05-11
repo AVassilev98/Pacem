@@ -506,34 +506,23 @@ int main()
     while (!renderer.exitSignal())
     {
         VkResult drawStatus = renderer.draw(suzanneMesh, pipeline);
-        // drawFrame(deviceInfo, swapchainInfo, renderContext, swapChainImages, renderPass, nbFrames, pipeline, pipelineLayout, windowInfo, suzanneMesh);
-        // if (drawStatus == VK_ERROR_OUT_OF_DATE_KHR || drawStatus == VK_SUBOPTIMAL_KHR)
-        // {
-        //     auto newSwapchainInfo = createSwapchain(deviceInfo, windowInfo, swapchainInfo.swapchain);
-        //     auto newDepthBuffers = createDepthBuffers(deviceInfo, allocator, newSwapchainInfo);
-        //     auto newSwapChainImages = getSwapChainImages(deviceInfo, allocator, windowInfo, newSwapchainInfo, renderPass, newDepthBuffers);
-        //     vkDeviceWaitIdle(deviceInfo.device);
-        //     freeSwapchainImages(deviceInfo.device, allocator, swapChainImages);
-        //     vkDestroySwapchainKHR(deviceInfo.device, swapchainInfo.swapchain, nullptr);
-        //     destroyDepthBuffers(deviceInfo.device, allocator, depthBuffers);
-        //     swapchainInfo = newSwapchainInfo;
-        //     swapChainImages = newSwapChainImages;
-        //     depthBuffers = std::move(newDepthBuffers);
-        // }
-        // else
-        // {
-        //     VK_LOG_ERR(drawStatus);
-        // }
+        if (drawStatus == VK_ERROR_OUT_OF_DATE_KHR || drawStatus == VK_SUBOPTIMAL_KHR)
+        {
+            renderer.resize();
+        }
+        else
+        {
+            VK_LOG_ERR(drawStatus);
+        }
 
-        // double currentTime = glfwGetTime();
-        // nbFrames++;
-        // if (currentTime - lastTime >= 1.0)
-        // {
-        //     printf("%f ms/frame\n", 1000.0 / double(nbFrames));
-        //     nbFrames = 0;
-        //     lastTime += 1.0;
-        // }
-
+        double currentTime = glfwGetTime();
+        nbFrames++;
+        if (currentTime - lastTime >= 1.0)
+        {
+            printf("%f ms/frame\n", 1000.0 / double(nbFrames));
+            nbFrames = 0;
+            lastTime += 1.0;
+        }
         glfwPollEvents();
     }
     renderer.wait();

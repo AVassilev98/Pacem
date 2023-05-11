@@ -1,5 +1,6 @@
 #pragma once
 #include "types.h"
+#include <cstdint>
 #include <vulkan/vulkan_core.h>
 
 class Renderer
@@ -7,6 +8,7 @@ class Renderer
   public:
     static Renderer &Get();
     VkResult draw(Mesh &mesh, VkPipeline pipeline);
+    void resize();
     bool exitSignal();
     void wait();
     ~Renderer();
@@ -56,4 +58,5 @@ class Renderer
     Renderer();
 
   private:
+    uint64_t m_frameCount;
 };

@@ -757,7 +757,6 @@ bool Renderer::exitSignal()
 
 VkResult Renderer::draw(Mesh &mesh, VkPipeline pipeline)
 {
-    static uint32_t frameCounter = 0;
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 projection;
@@ -769,16 +768,16 @@ VkResult Renderer::draw(Mesh &mesh, VkPipeline pipeline)
         projection = glm::perspective(glm::radians(70.f), 1700.f / 900.f, 1.0f, 5000.0f);
         projection[1][1] *= -1;
         // model rotation
-        model = glm::rotate(glm::mat4{1.0f}, glm::radians(frameCounter * 0.005f), glm::vec3(0, 1, 0)) *
+        model = glm::rotate(glm::mat4{1.0f}, glm::radians(m_frameCount * 0.005f), glm::vec3(0, 1, 0)) *
                 glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1, 0, 0));
-        frameCounter++;
     }
     PushConstants pushConstants = {};
     pushConstants.M = model;
     pushConstants.V = view;
     pushConstants.P = projection;
 
-    uint32_t frameIdx = frameCounter % m_swapchainInfo.numImages;
+    uint32_t frameIdx = m_frameCount % m_swapchainInfo.numImages;
+    m_frameCount++;
 
     VK_LOG_ERR(vkWaitForFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx], VK_TRUE, UINT64_MAX));
     VK_LOG_ERR(vkResetFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx]));
@@ -934,6 +933,23 @@ void Renderer::destroyDebugMessenger()
     }
 
     destroyDebugMessagerFunc(m_instance, m_debugMessenger, nullptr);
+}
+
+void Renderer::resize()
+{
+    m_frameCount = 0;
+    std::vector<VkFence> &fences = m_renderContext.fences;
+    vkWaitForFences(m_deviceInfo.device, fences.size(), fences.data(), VK_TRUE, UINT64_MAX);
+
+    SwapchainInfo swapchainInfo = createSwapchain();
+    vkDestroySwapchainKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, nullptr);
+    m_swapchainInfo = swapchainInfo;
+
+    freeSwapchainImages();
+    destroyDepthBuffers();
+
+    m_depthBuffers = createDepthBuffers();
+    m_swapchainImages = getSwapchainImages();
 }
 
 Renderer::Renderer()
