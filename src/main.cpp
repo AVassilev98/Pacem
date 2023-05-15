@@ -469,10 +469,25 @@ int main()
     VkPipeline pipeline = createPipeline(renderer.m_deviceInfo.device, renderer.m_renderPass, renderer.m_pipelineLayout, shaders);
 
     double lastTime = glfwGetTime();
+    
+    int num_monitors{1}, num_modes{1}, refresh_rate{60};
+    GLFWmonitor** monitors = glfwGetMonitors(&num_monitors);
+    for (int i = 0; i < num_monitors; ++i){
+        const GLFWvidmode* modes = glfwGetVideoModes(monitors[i], &num_modes);
+        for (int j = 0; j < num_modes; ++j){
+            refresh_rate = std::max(refresh_rate, modes[j].refreshRate);
+        }
+    }
+    
+    std::cout << refresh_rate << "Hz" << std::endl;
+    double delay = 1.0/refresh_rate;
+    std::cout << "Target delay = " << delay << std::endl;
+
     int nbFrames = 0;
 
     while (!renderer.exitSignal())
-    {
+    {   
+        while (glfwGetTime() - lastTime < delay){}
         VkResult drawStatus = renderer.draw(suzanneMesh, pipeline);
         if (drawStatus == VK_ERROR_OUT_OF_DATE_KHR || drawStatus == VK_SUBOPTIMAL_KHR)
         {
