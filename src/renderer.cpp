@@ -60,6 +60,18 @@ VkInstance Renderer::createInstance()
     std::vector<VkLayerProperties> availableLayers(layerCount);
     VK_LOG_ERR(vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()));
 
+    for (const auto& layer : availableLayers) {
+        uint32_t extensionCount{};  
+        VK_LOG_ERR(vkEnumerateInstanceExtensionProperties(layer.layerName, &extensionCount, nullptr));
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        VK_LOG_ERR(vkEnumerateInstanceExtensionProperties(layer.layerName, &extensionCount, availableExtensions.data()));
+        std::cout << layer.layerName << "\n";
+        for (const auto& extension : availableExtensions){
+            std::cout << "\t" << extension.extensionName << "\n";
+        }
+        std::cout << std::endl;
+    }
+
     VkApplicationInfo appInfo = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
     appInfo.pApplicationName = "Para-ray";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -87,7 +99,7 @@ VkInstance Renderer::createInstance()
     instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
     VkInstance instance = nullptr;
-    VK_LOG_ERR(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
+    VK_LOG_ERR_FATAL(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
     return instance;
 }
 
@@ -146,7 +158,7 @@ const WindowInfo Renderer::createWindow()
     WindowInfo windowInfo = {};
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    windowInfo.window = glfwCreateWindow(3840, 2160, "Pararay", nullptr, nullptr);
+    windowInfo.window = glfwCreateWindow(1920, 1080, "Pararay", nullptr, nullptr);
 
     VK_LOG_ERR(glfwCreateWindowSurface(m_instance, windowInfo.window, nullptr, &windowInfo.surface));
 
@@ -199,6 +211,23 @@ const WindowInfo Renderer::createWindow()
 
 const DeviceInfo Renderer::createDevice()
 {
+    uint32_t layerCount = 0;
+    VK_LOG_ERR(vkEnumerateDeviceLayerProperties(m_physDeviceInfo.device, &layerCount, nullptr));
+    printf("%u\n", layerCount);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    VK_LOG_ERR(vkEnumerateDeviceLayerProperties(m_physDeviceInfo.device, &layerCount, availableLayers.data()));
+
+    for (const auto& layer : availableLayers) {
+        uint32_t extensionCount{};  
+        VK_LOG_ERR(vkEnumerateDeviceExtensionProperties(m_physDeviceInfo.device, layer.layerName, &extensionCount, nullptr));
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        VK_LOG_ERR(vkEnumerateDeviceExtensionProperties(m_physDeviceInfo.device, layer.layerName, &extensionCount, availableExtensions.data()));
+        std::cout << layer.layerName << "\n";
+        for (const auto& extension : availableExtensions){
+            std::cout << "\t" << extension.extensionName << "\n";
+        }
+        std::cout << std::endl;
+    }
     VkDeviceCreateInfo deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos(m_physDeviceInfo.queueProperties.size());
@@ -274,6 +303,9 @@ SwapchainInfo Renderer::createSwapchain()
     int width;
     int height;
     glfwGetWindowSize(m_windowInfo.window, &width, &height);
+
+    glm::clamp((uint32_t)width, m_windowInfo.surfaceCapabilities.minImageExtent.width, m_windowInfo.surfaceCapabilities.maxImageExtent.width);
+    glm::clamp((uint32_t)height, m_windowInfo.surfaceCapabilities.minImageExtent.height, m_windowInfo.surfaceCapabilities.maxImageExtent.height);
 
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     swapchainCreateInfo.oldSwapchain = m_swapchainInfo.swapchain;
@@ -401,32 +433,32 @@ VkSampleCountFlagBits Renderer::getMaxSamples()
         m_physDeviceInfo.deviceProperties.limits.framebufferColorSampleCounts & m_physDeviceInfo.deviceProperties.limits.framebufferDepthSampleCounts;
     if (counts & VK_SAMPLE_COUNT_64_BIT)
     {
-        std::cout << "Max sample count is 64xMSAA";
+        std::cout << "Max sample count is 64xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_64_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_32_BIT)
     {
-        std::cout << "Max sample count is 32xMSAA";
+        std::cout << "Max sample count is 32xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_32_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_16_BIT)
     {
-        std::cout << "Max sample count is 16xMSAA";
+        std::cout << "Max sample count is 16xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_16_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_8_BIT)
     {
-        std::cout << "Max sample count is 8xMSAA";
+        std::cout << "Max sample count is 8xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_8_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_4_BIT)
     {
-        std::cout << "Max sample count is 4xMSAA";
+        std::cout << "Max sample count is 4xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_4_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_2_BIT)
     {
-        std::cout << "Max sample count is 2xMSAA";
+        std::cout << "Max sample count is 2xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_2_BIT;
     }
     return VK_SAMPLE_COUNT_1_BIT;
@@ -802,8 +834,8 @@ VkResult Renderer::draw(Mesh &mesh, VkPipeline pipeline)
     glfwGetWindowSize(m_windowInfo.window, &windowWidth, &windowHeight);
 
     VkViewport viewport;
-    viewport.height = windowHeight;
-    viewport.width = windowWidth;
+    viewport.height = static_cast<float>(windowHeight);
+    viewport.width = static_cast<float>(windowWidth);
     viewport.x = 0;
     viewport.y = 0;
     viewport.minDepth = 0.0f;
