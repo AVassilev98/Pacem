@@ -11,7 +11,6 @@ cmake --build .
 To build on Windows with Visual Studio:
 ```
 Make sure the 'CMake Tools' module is installed in Visual Studio
-cmake .. -GNinja
-cmake --build .
+If needed Right-click on CmakeLists.txt and click "Set as Startup Item"
 ```
 
