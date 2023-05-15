@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <sstream>
 #include <vulkan/vk_enum_string_helper.h>
 
 constexpr int width = 1920;
@@ -38,7 +39,10 @@ static_assert(false, "Must define an asset path for executable to look in");
         VkResult retCode = f_;                                                                                                                                 \
         if (retCode != VK_SUCCESS)                                                                                                                             \
         {                                                                                                                                                      \
-            throw std::invalid_argument(string_VkResult(retCode) + " Returned from " + __FUNCTION__ + " in " + __FILE__ + ":" + __LINE__);                     \
+            std::stringstream ss{};                                                                                                                            \
+            ss << string_VkResult(retCode) << " Returned from " << __FUNCTION__ << " in " << __FILE__ << ":" << __LINE__;                                      \
+            std::cerr << ss.str() << std::endl;                                                                                                                \
+            throw std::invalid_argument(ss.str());                                                                                                             \
         }                                                                                                                                                      \
     }
 
