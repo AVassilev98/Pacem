@@ -16,17 +16,17 @@
 
 static Assimp::Importer g_importer;
 
-template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::vec3 toGlmVec3(const T &elem)
+template <typename T>[[nodiscard]] inline glm::vec3 toGlmVec3(const T &elem)
 {
     return glm::vec3(elem[0], elem[1], elem[2]);
 }
 
-template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::vec2 toGlmVec2(const T &elem)
+template <typename T>[[nodiscard]] inline glm::vec2 toGlmVec2(const T &elem)
 {
     return glm::vec2(elem[0], -elem[1]);
 }
 
-template <typename T>[[nodiscard]] inline __attribute__((always_inline)) glm::vec3 toU32GlmVec3(const T &elem)
+template <typename T>[[nodiscard]] inline glm::vec3 toU32GlmVec3(const T &elem)
 {
     return glm::u32vec3(elem[0], elem[1], elem[2]);
 }

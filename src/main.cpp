@@ -440,9 +440,6 @@ VkSampler createSampler(VkDevice device)
 
 int main()
 {
-    std::filesystem::path selfPath = std::filesystem::read_symlink("/proc/self/exe");
-    std::filesystem::path selfDir = selfPath.parent_path();
-
     if (glfwInit() != GLFW_TRUE)
     {
         std::cerr << "Could not init glfw" << std::endl;

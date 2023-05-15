@@ -1,14 +1,14 @@
 
 cmake_minimum_required(VERSION 3.5)
-project(pararay)
+project(Pacem)
 
 include(FetchContent)
+include(FindVulkan)
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to conform to")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(glfw QUIET)
 
-find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 if(NOT glfw_FOUND)
@@ -99,7 +99,7 @@ if(NOT assimp_FOUND)
   include_directories(${assimp_BINARY_DIR}/include)
 endif()
 
-add_executable(pararay
+add_executable(Pacem
     src/main.cpp
     src/meshLoader.cpp
     src/renderer.cpp
@@ -107,8 +107,8 @@ add_executable(pararay
     src/shader.cpp
 )
 
-target_link_libraries(pararay
-    vulkan
+target_link_libraries(Pacem
+    Vulkan::Vulkan
     glfw
     assimp
 )
@@ -135,7 +135,7 @@ add_custom_command(
   OUTPUT ${SHADER_BINARY_DIR}
   COMMENT "Creating ${SHADER_BINARY_DIR}"
 )
-target_compile_definitions(pararay PUBLIC SHADER_PATH="${SHADER_BINARY_DIR}/")
+target_compile_definitions(Pacem PUBLIC SHADER_PATH="${SHADER_BINARY_DIR}/")
 
 foreach(source IN LISTS SHADERS)
   get_filename_component(FILENAME ${source} NAME)
@@ -149,10 +149,10 @@ foreach(source IN LISTS SHADERS)
 endforeach()
 
 add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS})
-add_dependencies(pararay shaders)
+add_dependencies(Pacem shaders)
 
 set(RESOURCE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
-target_compile_definitions(pararay PUBLIC ASSET_PATH="${RESOURCE_SOURCE_DIR}/")
+target_compile_definitions(Pacem PUBLIC ASSET_PATH="${RESOURCE_SOURCE_DIR}/")
 
 add_custom_target(resources ALL DEPENDS ${CP_RESOURCES})
-add_dependencies(pararay resources)
+add_dependencies(Pacem resources)

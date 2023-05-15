@@ -2,6 +2,7 @@
 #include "renderer.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <array>
 
 [[nodiscard]] Renderer &Renderer::Get()
 {
@@ -200,11 +201,11 @@ const DeviceInfo Renderer::createDevice()
     VkDeviceCreateInfo deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos(m_physDeviceInfo.queueProperties.size());
+    constexpr float queuePriority = 1.0f;
     for (uint32_t i = 0; i < queueCreateInfos.size(); i++)
     {
         auto &createInfo = queueCreateInfos[i];
         const auto &queueProperties = m_physDeviceInfo.queueProperties[i];
-        constexpr float queuePriority = 1.0f;
 
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         createInfo.queueCount = 1;
@@ -437,7 +438,7 @@ const VmaAllocator Renderer::createVmaAllocator()
     vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
 
     VmaAllocatorCreateInfo allocatorCreateInfo = {};
-    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_0;
+    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
     allocatorCreateInfo.physicalDevice = m_physDeviceInfo.device;
     allocatorCreateInfo.device = m_deviceInfo.device;
     allocatorCreateInfo.instance = m_instance;
