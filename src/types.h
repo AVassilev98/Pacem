@@ -79,8 +79,7 @@ struct Texture
 struct PushConstants
 {
     glm::mat4 M;
-    glm::mat4 V;
-    glm::mat4 P;
+    glm::mat4 VP;
 };
 
 struct Mesh
