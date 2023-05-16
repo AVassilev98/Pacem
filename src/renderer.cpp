@@ -1,8 +1,8 @@
 #include "common.h"
 #include "renderer.h"
+#include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <array>
 
 [[nodiscard]] Renderer &Renderer::Get()
 {
@@ -60,13 +60,15 @@ VkInstance Renderer::createInstance()
     std::vector<VkLayerProperties> availableLayers(layerCount);
     VK_LOG_ERR(vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()));
 
-    for (const auto& layer : availableLayers) {
-        uint32_t extensionCount{};  
+    for (const auto &layer : availableLayers)
+    {
+        uint32_t extensionCount{};
         VK_LOG_ERR(vkEnumerateInstanceExtensionProperties(layer.layerName, &extensionCount, nullptr));
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         VK_LOG_ERR(vkEnumerateInstanceExtensionProperties(layer.layerName, &extensionCount, availableExtensions.data()));
         std::cout << layer.layerName << "\n";
-        for (const auto& extension : availableExtensions){
+        for (const auto &extension : availableExtensions)
+        {
             std::cout << "\t" << extension.extensionName << "\n";
         }
         std::cout << std::endl;
@@ -217,13 +219,15 @@ const DeviceInfo Renderer::createDevice()
     std::vector<VkLayerProperties> availableLayers(layerCount);
     VK_LOG_ERR(vkEnumerateDeviceLayerProperties(m_physDeviceInfo.device, &layerCount, availableLayers.data()));
 
-    for (const auto& layer : availableLayers) {
-        uint32_t extensionCount{};  
+    for (const auto &layer : availableLayers)
+    {
+        uint32_t extensionCount{};
         VK_LOG_ERR(vkEnumerateDeviceExtensionProperties(m_physDeviceInfo.device, layer.layerName, &extensionCount, nullptr));
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         VK_LOG_ERR(vkEnumerateDeviceExtensionProperties(m_physDeviceInfo.device, layer.layerName, &extensionCount, availableExtensions.data()));
         std::cout << layer.layerName << "\n";
-        for (const auto& extension : availableExtensions){
+        for (const auto &extension : availableExtensions)
+        {
             std::cout << "\t" << extension.extensionName << "\n";
         }
         std::cout << std::endl;
