@@ -107,6 +107,8 @@ add_executable(Pacem
     src/shader.cpp
 )
 
+target_include_directories(Pacem AFTER PUBLIC include)
+
 target_link_libraries(Pacem
     Vulkan::Vulkan
     glfw
