@@ -8,10 +8,10 @@ layout(location = 3) in vec3 vertPosition;
 layout(location = 4) in vec3 lightPos;
 layout(location = 5) in mat3 TBN;
 
-layout(set = 0, binding = 0) uniform sampler2D diffuseTexture;
-layout(set = 0, binding = 1) uniform sampler2D aoTexture;
-layout(set = 0, binding = 2) uniform sampler2D emissiveTexture;
-layout(set = 0, binding = 3) uniform sampler2D normalMap;
+layout(set = 2, binding = 0) uniform sampler2D diffuseTexture;
+layout(set = 2, binding = 1) uniform sampler2D aoTexture;
+layout(set = 2, binding = 2) uniform sampler2D emissiveTexture;
+layout(set = 2, binding = 3) uniform sampler2D normalMap;
 
 // output write
 layout(location = 0) out vec4 outFragColor;

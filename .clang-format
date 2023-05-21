@@ -3,9 +3,22 @@ BasedOnStyle: LLVM
 AllowShortFunctionsOnASingleLine: None
 IndentWidth: '4'
 AllowShortIfStatementsOnASingleLine: Never
-AllowShortBlocksOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortLambdasOnASingleLine: None
+AlignOperands: AlignAfterOperator
+BreakBeforeBinaryOperators: All
+BreakBeforeTernaryOperators: true
 BreakBeforeBraces: Allman
 NamespaceIndentation: All
-ColumnLimit: 160
+ColumnLimit: 140
 BreakConstructorInitializers: BeforeComma
+AllowAllParametersOfDeclarationOnNextLine: false
+PointerAlignment: Right
+AlignTrailingComments: true
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: false
+  AfterControlStatement: true
+  AfterEnum: true
 ...

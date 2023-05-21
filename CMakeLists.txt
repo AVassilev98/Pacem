@@ -4,9 +4,10 @@ project(Pacem)
 
 include(FetchContent)
 include(FindVulkan)
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Vulkan REQUIRED)
 find_package(glfw QUIET)
 
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
@@ -101,10 +102,12 @@ endif()
 
 add_executable(Pacem
     src/main.cpp
-    src/meshLoader.cpp
+    src/mesh.cpp
     src/renderer.cpp
     src/vkinit.cpp
     src/shader.cpp
+    src/pipeline.cpp
+    src/gpuresource.cpp
 )
 
 target_link_libraries(Pacem
@@ -137,22 +140,19 @@ add_custom_command(
 )
 target_compile_definitions(Pacem PUBLIC SHADER_PATH="${SHADER_BINARY_DIR}/")
 
-foreach(source IN LISTS SHADERS)
-  get_filename_component(FILENAME ${source} NAME)
+foreach(ShaderSourceFile IN LISTS SHADERS)
+  get_filename_component(FILENAME ${ShaderSourceFile} NAME)
   add_custom_command(
     COMMAND
-      ${glslc_executable} -o ${SHADER_BINARY_DIR}/${FILENAME}.spv ${source}
+      ${glslc_executable} -o ${SHADER_BINARY_DIR}/${FILENAME}.spv ${ShaderSourceFile}
     OUTPUT ${SHADER_BINARY_DIR}/${FILENAME}.spv
+    DEPENDS ${ShaderSourceFile}
     COMMENT "Compiling ${FILENAME}"
   )
   list(APPEND SPV_SHADERS ${SHADER_BINARY_DIR}/${FILENAME}.spv)
 endforeach()
-
-add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS})
-add_dependencies(Pacem shaders)
+add_custom_target(ShaderCompilation DEPENDS ${SPV_SHADERS})
+add_dependencies(Pacem ShaderCompilation)
 
 set(RESOURCE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 target_compile_definitions(Pacem PUBLIC ASSET_PATH="${RESOURCE_SOURCE_DIR}/")
-
-add_custom_target(resources ALL DEPENDS ${CP_RESOURCES})
-add_dependencies(Pacem resources)
