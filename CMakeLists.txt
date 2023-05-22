@@ -4,7 +4,7 @@ project(Pacem)
 
 include(FetchContent)
 include(FindVulkan)
-set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to" FORCE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Vulkan REQUIRED)
@@ -109,8 +109,6 @@ add_executable(Pacem
     src/pipeline.cpp
     src/gpuresource.cpp
 )
-
-set_property(TARGET Pacem PROPERTY CXX_STANDARD 20)
 
 target_include_directories(Pacem AFTER PUBLIC include)
 
