@@ -69,42 +69,10 @@ struct Vertex
     glm::vec2 textureCoordinate;
 };
 
-struct Texture
-{
-    VkImage image;
-    VmaAllocation allocation;
-    VkImageView imageView;
-};
-
 struct PushConstants
 {
     glm::mat4 M;
     glm::mat4 VP;
-};
-
-struct Mesh
-{
-    VkSampler sampler;
-
-    // Total Mesh Buffer
-    std::vector<Vertex> vertices;
-    std::vector<glm::u32vec3> faces;
-    AllocatedBuffer vkVertexBuffer;
-    AllocatedBuffer vkIndexBuffer;
-
-    // Per Submesh
-    std::vector<VkDeviceSize> meshletVertexOffsets;
-    std::vector<VkDeviceSize> meshletIndexOffsets;
-    std::vector<VkDeviceSize> meshletIndexSizes;
-    std::vector<VkDeviceSize> matIndex;
-
-    // All Textures
-    std::unordered_map<std::string, Texture> textures;
-
-    // Per Material
-    std::vector<VkDescriptorSet> matDescriptorSets;
-
-    void drawMesh(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout);
 };
 
 struct DepthBuffer
@@ -162,4 +130,20 @@ struct RenderContext
     std::vector<VkFence> fences;
     std::vector<VkCommandPool> commandPools;
     std::vector<VkCommandBuffer> commandBuffers;
+};
+
+enum class QueueFamily
+{
+    Transfer,
+    Graphics,
+
+    Size
+};
+
+struct VmaAllocationState
+{
+    VmaAllocation &allocation;         // out
+    VmaAllocationInfo &allocationInfo; // out
+    VmaMemoryUsage usage;
+    VmaAllocationCreateFlags flags;
 };
