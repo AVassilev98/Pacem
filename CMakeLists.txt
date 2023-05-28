@@ -100,6 +100,17 @@ if(NOT assimp_FOUND)
   include_directories(${assimp_BINARY_DIR}/include)
 endif()
 
+add_library(imgui
+  imgui/backends/imgui_impl_glfw.cpp
+  imgui/backends/imgui_impl_vulkan.cpp
+  imgui/imgui_demo.cpp
+  imgui/imgui_draw.cpp
+  imgui/imgui_tables.cpp
+  imgui/imgui_widgets.cpp
+  imgui/imgui.cpp
+)
+target_include_directories(imgui PUBLIC imgui)
+
 add_executable(Pacem
     src/main.cpp
     src/mesh.cpp
@@ -110,13 +121,14 @@ add_executable(Pacem
     src/gpuresource.cpp
     src/renderpass.cpp
 )
-
 target_include_directories(Pacem PUBLIC include)
+target_include_directories(Pacem PUBLIC imgui)
 
 target_link_libraries(Pacem
     Vulkan::Vulkan
     glfw
     assimp
+    imgui
 )
 
 set(SHADER_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
