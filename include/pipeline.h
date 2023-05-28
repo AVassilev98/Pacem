@@ -9,7 +9,6 @@
 class Pipeline
 {
   public:
-    Pipeline() = default;
     struct State
     {
         struct Dynamic
@@ -29,12 +28,14 @@ class Pipeline
         Dynamic dynamicState = {};
     };
     Pipeline(const State &state);
+    Pipeline() = default;
 
   public:
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_pipeline;
     VkRenderPass m_renderPass;
     std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> m_descriptorSetLayouts;
+    void freeResources();
 
   private:
     State::Dynamic m_dynamicState;

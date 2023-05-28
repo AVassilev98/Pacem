@@ -21,6 +21,7 @@ class MainRenderPass : public RenderPass
 
   public:
     MainRenderPass(const std::span<Shader *> &shaders);
+    ~MainRenderPass();
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);

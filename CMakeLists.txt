@@ -108,9 +108,10 @@ add_executable(Pacem
     src/shader.cpp
     src/pipeline.cpp
     src/gpuresource.cpp
+    src/renderpass.cpp
 )
 
-target_include_directories(Pacem AFTER PUBLIC include)
+target_include_directories(Pacem PUBLIC include)
 
 target_link_libraries(Pacem
     Vulkan::Vulkan

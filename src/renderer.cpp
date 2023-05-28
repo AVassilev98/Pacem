@@ -318,7 +318,7 @@ const DeviceInfo Renderer::createDevice()
     return deviceInfo;
 }
 
-SwapchainInfo Renderer::createSwapchain()
+SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE)
 {
     int width;
     int height;
@@ -330,7 +330,7 @@ SwapchainInfo Renderer::createSwapchain()
                m_windowInfo.surfaceCapabilities.maxImageExtent.height);
 
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
-    swapchainCreateInfo.oldSwapchain = m_swapchainInfo.swapchain;
+    swapchainCreateInfo.oldSwapchain = oldSwapchain;
     swapchainCreateInfo.imageFormat = m_windowInfo.preferredSurfaceFormat.format;
     swapchainCreateInfo.imageColorSpace = m_windowInfo.preferredSurfaceFormat.colorSpace;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1008,7 +1008,9 @@ void Renderer::addRenderPass(RenderPass *renderPass)
 void Renderer::handleResize()
 {
     freeSwapchainImages();
-    m_swapchainInfo = createSwapchain();
+    VkSwapchainKHR oldSwapchain = m_swapchainInfo.swapchain;
+    m_swapchainInfo = createSwapchain(oldSwapchain);
+    vkDestroySwapchainKHR(m_deviceInfo.device, oldSwapchain, nullptr);
     m_swapchainImages = getSwapchainImages();
     for (RenderPass *renderPass : m_renderPasses)
     {
@@ -1042,6 +1044,7 @@ Renderer::~Renderer()
     destroyTransferQueue();
     destroyRenderContext();
     destroyDescriptorPools();
+    freeSwapchainImages();
     vkDestroySwapchainKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, nullptr);
     vkDestroySurfaceKHR(m_instance, m_windowInfo.surface, nullptr);
     vmaDestroyAllocator(m_vmaAllocator);

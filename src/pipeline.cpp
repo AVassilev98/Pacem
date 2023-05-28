@@ -89,3 +89,16 @@ Pipeline::Pipeline(const State &state)
     m_pipeline = VkInit::CreateVkPipeline(pipelineState);
     m_dynamicState = state.dynamicState;
 }
+
+void Pipeline::freeResources()
+{
+    Renderer &renderer = Renderer::Get();
+
+    vkDestroyPipeline(renderer.m_deviceInfo.device, m_pipeline, nullptr);
+    vkDestroyPipelineLayout(renderer.m_deviceInfo.device, m_pipelineLayout, nullptr);
+    vkDestroyRenderPass(renderer.m_deviceInfo.device, m_renderPass, nullptr);
+    for (VkDescriptorSetLayout descriptorSetLayout : m_descriptorSetLayouts)
+    {
+        vkDestroyDescriptorSetLayout(renderer.m_deviceInfo.device, descriptorSetLayout, nullptr);
+    }
+}

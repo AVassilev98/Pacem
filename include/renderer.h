@@ -13,7 +13,6 @@ class Renderer
     static Renderer &Get();
     VkResult draw(Mesh &mesh, const RenderPass &renderpass);
     VkExtent2D getWindowExtent();
-    void resize();
     bool exitSignal();
     uint32_t getQueueFamilyIdx(QueueFamily family);
     uint32_t getMaxNumFramesInFlight();
@@ -53,7 +52,9 @@ class Renderer
             .families = texQueueFamilies,
         };
 
-        return uploadImageToGpu(stagingBuffer.m_buffer, dstState);
+        Image gpuImage = uploadImageToGpu(stagingBuffer.m_buffer, dstState);
+        stagingBuffer.freeResources();
+        return gpuImage;
     }
 
     template <typename T> Buffer uploadCpuBufferToGpu(const std::span<T> &buf, VkBufferUsageFlags usage)
@@ -85,7 +86,10 @@ class Renderer
             .usage = usage,
             .families = queueFamilies,
         };
-        return uploadBufferToGpu(stagingBuf, dstState);
+        Buffer gpuBuffer = uploadBufferToGpu(stagingBuf, dstState);
+
+        vmaDestroyBuffer(m_vmaAllocator, stagingBuf, stagingAlloc);
+        return gpuBuffer;
     }
 
     VkInstance m_instance = {};
@@ -111,7 +115,7 @@ class Renderer
     VkSampleCountFlagBits getMaxSamples();
     const DeviceInfo createDevice();
     const VmaAllocator createVmaAllocator();
-    SwapchainInfo createSwapchain();
+    SwapchainInfo createSwapchain(VkSwapchainKHR swapchain);
     VkDescriptorPool createDescriptorPool();
     void destroyDescriptorPools();
     std::vector<Image> getSwapchainImages();

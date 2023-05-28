@@ -35,9 +35,8 @@ Buffer::Buffer(const State &state)
 
 void Buffer::freeResources()
 {
-    std::cout << "Freeing Buffer!" << std::endl;
     Renderer &renderer = Renderer::Get();
-    vkDestroyBuffer(renderer.m_deviceInfo.device, m_buffer, nullptr);
+    vmaDestroyBuffer(renderer.m_vmaAllocator, m_buffer, m_allocation);
 }
 
 Image::Image(const State &state)
@@ -90,7 +89,6 @@ Image::Image(const CopyState &state)
 
 void Image::freeResources()
 {
-    std::cout << "Freeing Image!" << std::endl;
     Renderer &renderer = Renderer::Get();
 
     vkDestroyImageView(renderer.m_deviceInfo.device, m_imageView, nullptr);
@@ -124,7 +122,6 @@ Framebuffer::Framebuffer(const State &state)
 
 void Framebuffer::freeResources()
 {
-    std::cout << "Freeing Framebuffer!" << std::endl;
     Renderer &renderer = Renderer::Get();
 
     vkDestroyFramebuffer(renderer.m_deviceInfo.device, m_frameBuffer, nullptr);

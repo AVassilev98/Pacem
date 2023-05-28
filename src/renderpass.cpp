@@ -193,7 +193,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .vertexAttributeDescription = vertexAttributeDescriptions,
         .sampleCount = renderer.m_numSamples,
     };
-    m_pipeline = Pipeline(pipelineState);
+    m_pipeline = std::move(Pipeline(pipelineState));
 }
 
 void MainRenderPass::resize(uint32_t width, uint32_t height)
@@ -209,4 +209,15 @@ void MainRenderPass::resize(uint32_t width, uint32_t height)
     m_depthImages.clear();
     m_swapchainImages.clear();
     createFrameBuffers(m_pipeline.m_renderPass);
+}
+
+MainRenderPass::~MainRenderPass()
+{
+    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
+    {
+        m_framebuffers[i].freeResources();
+        m_multisampledImages[i].freeResources();
+        m_depthImages[i].freeResources();
+    }
+    m_pipeline.freeResources();
 }
