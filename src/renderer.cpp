@@ -635,83 +635,22 @@ bool Renderer::exitSignal()
     return glfwWindowShouldClose(m_windowInfo.window);
 }
 
-VkResult Renderer::draw(Mesh &mesh, const RenderPass &renderPass)
+VkResult Renderer::draw()
 {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 projection;
-    {
-        glm::vec3 camPos = {0.f, -1.f, -4.f};
-
-        view = glm::translate(glm::mat4(1.f), camPos);
-        // camera projection
-        projection = glm::perspective(glm::radians(70.f), 1700.f / 900.f, 1.0f, 5000.0f);
-        projection[1][1] *= -1;
-        // model rotation
-        model = glm::rotate(glm::mat4{1.0f}, glm::radians(m_frameCount * 0.005f), glm::vec3(0, 1, 0))
-              * glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1, 0, 0));
-    }
-    PushConstants pushConstants = {};
-    pushConstants.M = model;
-    pushConstants.VP = projection * view;
-
     uint32_t frameIdx = (m_frameCount) % m_swapchainInfo.numImages;
     m_frameCount++;
-
     VK_LOG_ERR(vkWaitForFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx], VK_TRUE, UINT64_MAX));
     VK_LOG_ERR(vkResetFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx]));
 
-    VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    VkRect2D renderArea = {};
-    renderArea.extent = {m_swapchainInfo.width, m_swapchainInfo.height};
-    renderPassBeginInfo.renderArea = renderArea;
-    renderPassBeginInfo.renderPass = renderPass.m_pipeline.m_renderPass;
-
-    VkClearValue clearValues[3];
-    clearValues[0].color = {0.f, 0.f, 0.f, 0.f};
-    clearValues[1].depthStencil = {1.f, 0};
-    clearValues[2].color = {0.f, 0.f, 0.f, 0.f};
-
-    renderPassBeginInfo.clearValueCount = 3;
-    renderPassBeginInfo.pClearValues = clearValues;
-
-    int windowWidth = 0;
-    int windowHeight = 0;
-    glfwGetWindowSize(m_windowInfo.window, &windowWidth, &windowHeight);
-
-    VkViewport viewport;
-    viewport.height = static_cast<float>(windowHeight);
-    viewport.width = static_cast<float>(windowWidth);
-    viewport.x = 0;
-    viewport.y = 0;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor;
-    scissor.offset = {0, 0};
-    scissor.extent = {(uint32_t)windowWidth, (uint32_t)windowHeight};
-
-    renderPassBeginInfo.framebuffer = renderPass.m_framebuffers[frameIdx].m_frameBuffer;
-
     VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     VK_LOG_ERR(vkBeginCommandBuffer(m_renderContext.commandBuffers[frameIdx], &commandBufferBeginInfo));
-    vkCmdSetViewport(m_renderContext.commandBuffers[frameIdx], 0, 1, &viewport);
-    vkCmdSetScissor(m_renderContext.commandBuffers[frameIdx], 0, 1, &scissor);
-    VkSubpassContents subpassContents = {};
-    vkCmdBeginRenderPass(m_renderContext.commandBuffers[frameIdx], &renderPassBeginInfo, subpassContents);
-    vkCmdBindPipeline(m_renderContext.commandBuffers[frameIdx], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.m_pipeline.m_pipeline);
 
-    vkCmdPushConstants(m_renderContext.commandBuffers[frameIdx], renderPass.m_pipeline.m_pipelineLayout, VK_SHADER_STAGE_GEOMETRY_BIT, 0,
-                       sizeof(PushConstants), &pushConstants);
+    for (RenderPass *renderPass : m_renderPasses)
+    {
+        renderPass->draw(m_renderContext.commandBuffers[frameIdx], frameIdx);
+    }
 
-    mesh.drawMesh(m_renderContext.commandBuffers[frameIdx], renderPass.m_pipeline.m_pipelineLayout);
-
-    vkCmdEndRenderPass(m_renderContext.commandBuffers[frameIdx]);
     VK_LOG_ERR(vkEndCommandBuffer(m_renderContext.commandBuffers[frameIdx]));
-
-    uint32_t imageIndex = 0;
-    VK_LOG_ERR(vkAcquireNextImageKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, UINT64_MAX, m_renderContext.imgAvailableSem[frameIdx],
-                                     nullptr, &imageIndex));
 
     VkPipelineStageFlags waitDstStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -723,6 +662,9 @@ VkResult Renderer::draw(Mesh &mesh, const RenderPass &renderPass)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &m_renderContext.renderDoneSem[frameIdx];
 
+    uint32_t imageIndex = 0;
+    VK_LOG_ERR(vkAcquireNextImageKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, UINT64_MAX, m_renderContext.imgAvailableSem[frameIdx],
+                                     nullptr, &imageIndex));
     VK_LOG_ERR(
         vkQueueSubmit(m_deviceInfo.queues[m_deviceInfo.graphicsQueueFamily].queue, 1, &submitInfo, m_renderContext.fences[frameIdx]));
 
@@ -1007,6 +949,7 @@ void Renderer::addRenderPass(RenderPass *renderPass)
 
 void Renderer::handleResize()
 {
+    m_frameCount = 0;
     freeSwapchainImages();
     VkSwapchainKHR oldSwapchain = m_swapchainInfo.swapchain;
     m_swapchainInfo = createSwapchain(oldSwapchain);

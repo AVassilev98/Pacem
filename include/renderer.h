@@ -11,7 +11,7 @@ class Renderer
 
   public:
     static Renderer &Get();
-    VkResult draw(Mesh &mesh, const RenderPass &renderpass);
+    VkResult draw();
     VkExtent2D getWindowExtent();
     bool exitSignal();
     uint32_t getQueueFamilyIdx(QueueFamily family);

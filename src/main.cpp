@@ -48,6 +48,7 @@ int main()
 
     MainRenderPass mainRenderPass(shadersp);
     Mesh suzanneMesh(suzannePath, mainRenderPass.m_pipeline);
+    mainRenderPass.addMesh(&suzanneMesh);
 
     renderer.addRenderPass(&mainRenderPass);
 
@@ -56,7 +57,7 @@ int main()
 
     while (!renderer.exitSignal())
     {
-        VkResult drawStatus = renderer.draw(suzanneMesh, mainRenderPass);
+        VkResult drawStatus = renderer.draw();
 
         double currentTime = glfwGetTime();
         nbFrames++;
