@@ -18,6 +18,8 @@ struct Buffer
         VmaAllocationCreateFlags vmaFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     };
     Buffer(const State &state);
+    Buffer(const Buffer &buffer) = default;
+    void freeResources();
 
     VkBuffer m_buffer;
     VmaAllocation m_allocation;
@@ -39,6 +41,7 @@ struct Image
         VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         VmaMemoryUsage vmaUsage = VMA_MEMORY_USAGE_AUTO;
         VmaAllocationCreateFlags vmaFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     };
     Image(const State &state);
 
@@ -51,7 +54,8 @@ struct Image
         const uint32_t &height;
     };
     Image(const CopyState &state);
-    Image(const Image &state) = default;
+    Image(const Image &image) = default;
+    void freeResources();
 
     VkImage m_image;
     VkImageView m_imageView;
@@ -66,10 +70,12 @@ struct Framebuffer
     Framebuffer() = default;
     struct State
     {
-        const std::span<Image> &images;
+        const std::span<Image *> &images;
         const VkRenderPass &renderpass;
     };
     Framebuffer(const State &state);
+    Framebuffer(const Framebuffer &framebuffer) = default;
+    void freeResources();
 
     VkFramebuffer m_frameBuffer;
     VkRenderPass m_renderPass;

@@ -23,7 +23,10 @@ Pipeline::Pipeline(const State &state)
         numShaderStages++;
     }
 
-    std::copy(state.layouts.begin(), state.layouts.end(), m_descriptorSetLayouts.begin());
+    for (uint32_t i = 0; i < DSL_FREQ_COUNT; i++)
+    {
+        m_descriptorSetLayouts[i] = state.layouts[i];
+    }
     m_pipelineLayout = VkInit::CreateVkPipelineLayout(m_descriptorSetLayouts, state.pushConstantRanges);
 
     VkPipelineTessellationStateCreateInfo tessellationStateInfo = {

@@ -44,17 +44,6 @@ struct SwapchainInfo
     uint32_t width;
 };
 
-struct ImageGroupInfo
-{
-    std::vector<VkImage> msaaImages;
-    std::vector<VkImageView> msaaImageViews;
-    std::vector<VmaAllocation> msaaImageAllocations;
-
-    std::vector<VkImage> images;
-    std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> frameBuffers;
-};
-
 struct AllocatedBuffer
 {
     VkBuffer buffer;

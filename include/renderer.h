@@ -1,20 +1,26 @@
 #pragma once
-#include "mesh.h"
-#include "types.h"
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
+
+#include "mesh.h"
+#include "renderpass.h"
+#include "types.h"
 
 class Renderer
 {
 
   public:
     static Renderer &Get();
-    VkResult draw(Mesh &mesh, VkPipeline pipeline);
+    VkResult draw(Mesh &mesh, const RenderPass &renderpass);
     VkExtent2D getWindowExtent();
     void resize();
     bool exitSignal();
     uint32_t getQueueFamilyIdx(QueueFamily family);
+    uint32_t getMaxNumFramesInFlight();
     VkDescriptorSet allocateDescriptorSet(VkDescriptorSetLayout layout);
+    const SwapchainInfo &getSwapchainInfo();
+    void addRenderPass(RenderPass *renderPass);
+
     void wait();
     ~Renderer();
 
@@ -90,14 +96,11 @@ class Renderer
     DeviceInfo m_deviceInfo = {};
     VmaAllocator m_vmaAllocator = {};
     SwapchainInfo m_swapchainInfo = {};
-    std::vector<DepthBuffer> m_depthBuffers = {};
-    VkDescriptorSetLayout m_descriptorSetLayout = {};
-    VkPipelineLayout m_pipelineLayout = {};
     std::vector<VkDescriptorPool> m_descriptorPools;
-    VkRenderPass m_renderPass = {};
-    ImageGroupInfo m_swapchainImages = {};
+    std::vector<Image> m_swapchainImages = {};
     RenderContext m_renderContext = {};
     TransferQueue m_transferQueue = {};
+    std::vector<RenderPass *> m_renderPasses = {};
 
   private:
     void initialize();
@@ -109,15 +112,13 @@ class Renderer
     const DeviceInfo createDevice();
     const VmaAllocator createVmaAllocator();
     SwapchainInfo createSwapchain();
-    VkRenderPass createRenderPass();
-    std::vector<DepthBuffer> createDepthBuffers();
-    VkDescriptorSetLayout createDescriptorSetLayout();
-    VkPipelineLayout createPipelineLayout();
     VkDescriptorPool createDescriptorPool();
     void destroyDescriptorPools();
-    ImageGroupInfo getSwapchainImages();
+    std::vector<Image> getSwapchainImages();
     RenderContext createRenderContext();
     TransferQueue createTransferQueue();
+
+    void handleResize();
 
     struct UploadInfo
     {

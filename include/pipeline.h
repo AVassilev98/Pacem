@@ -9,6 +9,7 @@
 class Pipeline
 {
   public:
+    Pipeline() = default;
     struct State
     {
         struct Dynamic
@@ -27,7 +28,6 @@ class Pipeline
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
         Dynamic dynamicState = {};
     };
-
     Pipeline(const State &state);
 
   public:

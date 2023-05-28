@@ -33,6 +33,13 @@ Buffer::Buffer(const State &state)
     m_buffer = VkInit::CreateVkBuffer(bufferState);
 }
 
+void Buffer::freeResources()
+{
+    std::cout << "Freeing Buffer!" << std::endl;
+    Renderer &renderer = Renderer::Get();
+    vkDestroyBuffer(renderer.m_deviceInfo.device, m_buffer, nullptr);
+}
+
 Image::Image(const State &state)
     : m_width(state.width)
     , m_height(state.height)
@@ -67,6 +74,7 @@ Image::Image(const State &state)
     VkInit::ImageViewState imageViewState = {
         .image = m_image,
         .format = state.format,
+        .aspectMask = state.aspectMask,
     };
     m_imageView = VkInit::CreateVkImageView(imageViewState);
 }
@@ -80,6 +88,15 @@ Image::Image(const CopyState &state)
 {
 }
 
+void Image::freeResources()
+{
+    std::cout << "Freeing Image!" << std::endl;
+    Renderer &renderer = Renderer::Get();
+
+    vkDestroyImageView(renderer.m_deviceInfo.device, m_imageView, nullptr);
+    vmaDestroyImage(renderer.m_vmaAllocator, m_image, m_allocation);
+}
+
 Framebuffer::Framebuffer(const State &state)
     : m_renderPass(state.renderpass)
 {
@@ -88,11 +105,11 @@ Framebuffer::Framebuffer(const State &state)
 
     std::vector<VkImageView> attachments;
     attachments.reserve(state.images.size());
-    for (const Image &image : state.images)
+    for (const Image *image : state.images)
     {
-        attachments.push_back(image.m_imageView);
-        m_width = std::min(m_width, image.m_width);
-        m_height = std::min(m_height, image.m_height);
+        attachments.push_back(image->m_imageView);
+        m_width = std::min(m_width, image->m_width);
+        m_height = std::min(m_height, image->m_height);
     }
 
     VkInit::FramebufferState framebufferState = {
@@ -103,4 +120,12 @@ Framebuffer::Framebuffer(const State &state)
     };
 
     m_frameBuffer = VkInit::CreateVkFramebuffer(framebufferState);
+}
+
+void Framebuffer::freeResources()
+{
+    std::cout << "Freeing Framebuffer!" << std::endl;
+    Renderer &renderer = Renderer::Get();
+
+    vkDestroyFramebuffer(renderer.m_deviceInfo.device, m_frameBuffer, nullptr);
 }
