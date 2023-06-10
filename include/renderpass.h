@@ -15,7 +15,6 @@ class RenderPass
 
   public:
     std::vector<Framebuffer> m_framebuffers;
-    Pipeline m_pipeline;
 
   protected:
     std::vector<Mesh *> m_meshes;
@@ -30,10 +29,10 @@ class MainRenderPass : public RenderPass
   public:
     MainRenderPass(const std::span<Shader *> &shaders);
     ~MainRenderPass();
+    Pipeline m_pipeline;
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);
-    // virtual void resize(uint32_t width, uint32_t height) override;
     std::vector<Image> m_multisampledImages;
     std::vector<Image> m_depthImages;
     std::vector<Image *> m_swapchainImages;

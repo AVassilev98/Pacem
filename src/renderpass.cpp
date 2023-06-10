@@ -1,5 +1,7 @@
 #include "GLFW/glfw3.h"
 #include "glm/glm.hpp"
+#include "gpuresource.h"
+#include "imgui.h"
 #include "renderer.h"
 #include "renderpass.h"
 #include "types.h"

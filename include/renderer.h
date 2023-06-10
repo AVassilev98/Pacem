@@ -1,5 +1,5 @@
 #pragma once
-#include <cstdint>
+#include <functional>
 #include <vulkan/vulkan_core.h>
 
 #include "mesh.h"
@@ -27,6 +27,9 @@ class Renderer
     Buffer uploadBufferToGpu(VkBuffer src, Buffer::State &dstState);
     Image uploadImageToGpu(VkBuffer src, Image::State &dstState);
     void updateDescriptor(VkDescriptorSet descriptorSet, const VkDescriptorImageInfo &descriptorImageInfo, uint32_t binding);
+
+    void transferImmediate(std::function<void(VkCommandBuffer cmd)> &&function);
+    void graphicsImmediate(std::function<void(VkCommandBuffer cmd)> &&function);
 
   public:
     // Template functions

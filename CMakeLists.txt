@@ -120,6 +120,7 @@ add_executable(Pacem
     src/pipeline.cpp
     src/gpuresource.cpp
     src/renderpass.cpp
+    src/gui.cpp
 )
 target_include_directories(Pacem PUBLIC include)
 target_include_directories(Pacem PUBLIC imgui)

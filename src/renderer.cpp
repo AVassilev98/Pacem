@@ -1,4 +1,5 @@
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -172,6 +173,7 @@ const WindowInfo Renderer::createWindow()
     WindowInfo windowInfo = {};
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
     windowInfo.window = glfwCreateWindow(1920, 1080, "Pararay", nullptr, nullptr);
 
     VK_LOG_ERR(glfwCreateWindowSurface(m_instance, windowInfo.window, nullptr, &windowInfo.surface));
@@ -977,6 +979,57 @@ Renderer::Renderer()
     , m_renderContext(createRenderContext())
     , m_transferQueue(createTransferQueue())
 {
+}
+
+void Renderer::transferImmediate(std::function<void(VkCommandBuffer cmd)> &&function)
+{
+
+    VkCommandBufferBeginInfo cmdBufBeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(m_transferQueue.immCmdBuf, &cmdBufBeginInfo);
+    function(m_transferQueue.immCmdBuf);
+    vkEndCommandBuffer(m_transferQueue.immCmdBuf);
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &m_transferQueue.immCmdBuf,
+    };
+
+    VkFenceCreateInfo fence_create_info = {};
+    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence transferFence;
+
+    vkCreateFence(m_deviceInfo.device, &fence_create_info, nullptr, &transferFence);
+    vkQueueSubmit(m_transferQueue.transferQueue, 1, &submitInfo, transferFence);
+    vkWaitForFences(m_deviceInfo.device, 1, &transferFence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(m_deviceInfo.device, transferFence, nullptr);
+}
+
+void Renderer::graphicsImmediate(std::function<void(VkCommandBuffer cmd)> &&function)
+{
+    VkCommandBufferBeginInfo cmdBufBeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(m_transferQueue.graphicsCmdBuf, &cmdBufBeginInfo);
+    function(m_transferQueue.graphicsCmdBuf);
+    vkEndCommandBuffer(m_transferQueue.graphicsCmdBuf);
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &m_transferQueue.graphicsCmdBuf,
+    };
+
+    VkFenceCreateInfo fence_create_info = {};
+    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence transferFence;
+
+    vkCreateFence(m_deviceInfo.device, &fence_create_info, nullptr, &transferFence);
+    vkQueueSubmit(m_transferQueue.graphicsQueue, 1, &submitInfo, transferFence);
+    vkWaitForFences(m_deviceInfo.device, 1, &transferFence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(m_deviceInfo.device, transferFence, nullptr);
 }
 
 Renderer::~Renderer()

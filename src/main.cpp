@@ -17,6 +17,7 @@
 #include "vma.h"
 
 #include "common.h"
+#include "gui.h"
 #include "pipeline.h"
 #include "renderer.h"
 #include "renderpass.h"
@@ -33,6 +34,7 @@ int main()
     }
 
     Renderer &renderer = Renderer::Get();
+    Gui &gui = Gui::Get();
 
     std::string vertShaderPath = CONCAT(SHADER_PATH, "default.vert.spv");
     std::string geoShaderPath = CONCAT(SHADER_PATH, "default.geom.spv");
@@ -51,6 +53,7 @@ int main()
     mainRenderPass.addMesh(&suzanneMesh);
 
     renderer.addRenderPass(&mainRenderPass);
+    renderer.addRenderPass(&gui);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
