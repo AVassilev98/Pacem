@@ -16,6 +16,14 @@ void RenderPass::addMesh(Mesh *mesh)
     m_meshes.push_back(mesh);
 }
 
+void RenderPass::fulfillRenderPassDependencies(VkCommandBuffer cmd, uint32_t frameIdx)
+{
+    for (auto &dependency : m_dependencies)
+    {
+        dependency(cmd, frameIdx);
+    }
+}
+
 void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
 {
     Renderer &renderer = Renderer::Get();
@@ -24,7 +32,7 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
 
     m_multisampledImages.reserve(maxFramesInFlight);
     m_depthImages.reserve(maxFramesInFlight);
-    m_swapchainImages.reserve(maxFramesInFlight);
+    m_outputImages.reserve(maxFramesInFlight);
     m_framebuffers.reserve(maxFramesInFlight);
 
     QueueFamily imageFamily = QueueFamily::Graphics;
@@ -32,7 +40,7 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
         .width = swapchainInfo.width,
         .height = swapchainInfo.height,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .format = renderer.m_windowInfo.preferredSurfaceFormat.format,
+        .format = VK_FORMAT_B8G8R8A8_SRGB,
         .families = {&imageFamily, 1},
         .samples = renderer.m_numSamples,
     };
@@ -47,12 +55,20 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
     };
 
+    Image::State outputState = {
+        .width = swapchainInfo.width,
+        .height = swapchainInfo.height,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .format = VK_FORMAT_B8G8R8A8_SRGB,
+        .families = {&imageFamily, 1},
+    };
+
     for (int i = 0; i < maxFramesInFlight; i++)
     {
         m_multisampledImages.emplace_back(msaaState);
         m_depthImages.emplace_back(depthBufState);
-        m_swapchainImages.emplace_back(&renderer.m_swapchainImages[i]);
-        auto attachments = std::to_array({&m_multisampledImages[i], &m_depthImages[i], m_swapchainImages[i]});
+        m_outputImages.emplace_back(outputState);
+        auto attachments = std::to_array({&m_multisampledImages[i], &m_depthImages[i], &m_outputImages[i]});
 
         Framebuffer::State framebufferState = {
             .images = std::span(attachments),
@@ -83,7 +99,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
+        .format = VK_FORMAT_B8G8R8A8_SRGB,
         .samples = Renderer::Get().m_numSamples,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -98,10 +114,10 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
     };
     VkInit::RenderPassState::Attachment resolve = {
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
+        .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .format = VK_FORMAT_B8G8R8A8_SRGB,
         .attachment = 2,
-        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .referenceLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     };
 
     auto subpassDependencies = std::to_array({
@@ -208,16 +224,17 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
 
 void MainRenderPass::resize(uint32_t width, uint32_t height)
 {
-    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
+    for (uint32_t i = 0; i < m_outputImages.size(); i++)
     {
         m_framebuffers[i].freeResources();
         m_multisampledImages[i].freeResources();
         m_depthImages[i].freeResources();
+        m_outputImages[i].freeResources();
     }
     m_framebuffers.clear();
     m_multisampledImages.clear();
     m_depthImages.clear();
-    m_swapchainImages.clear();
+    m_outputImages.clear();
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
@@ -249,7 +266,7 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_swapchainImages[0]->m_width, m_swapchainImages[0]->m_height};
+    renderArea.extent = {m_outputImages[0].m_width, m_outputImages[0].m_height};
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
@@ -293,11 +310,12 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 
 MainRenderPass::~MainRenderPass()
 {
-    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
+    for (uint32_t i = 0; i < m_outputImages.size(); i++)
     {
         m_framebuffers[i].freeResources();
         m_multisampledImages[i].freeResources();
         m_depthImages[i].freeResources();
+        m_outputImages[i].freeResources();
     }
     m_pipeline.freeResources();
 }

@@ -338,7 +338,7 @@ SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HA
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapchainCreateInfo.minImageCount = numPreferredImages > m_windowInfo.surfaceCapabilities.maxImageCount
                                           ? m_windowInfo.surfaceCapabilities.maxImageCount
                                           : numPreferredImages;
@@ -649,6 +649,7 @@ VkResult Renderer::draw()
 
     for (RenderPass *renderPass : m_renderPasses)
     {
+        renderPass->fulfillRenderPassDependencies(m_renderContext.commandBuffers[frameIdx], frameIdx);
         renderPass->draw(m_renderContext.commandBuffers[frameIdx], frameIdx);
     }
 

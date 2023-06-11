@@ -54,6 +54,7 @@ int main()
 
     renderer.addRenderPass(&mainRenderPass);
     renderer.addRenderPass(&gui);
+    gui.declareGammaDependency(mainRenderPass.m_outputImages);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
