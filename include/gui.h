@@ -10,7 +10,7 @@ class Gui : public RenderPass
     ~Gui();
     virtual void resize(uint32_t width, uint32_t height) override;
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
-    void declareGammaDependency(const std::vector<Image> &input);
+    void declareGammaDependency(const std::vector<Image *> &input);
 
     VkRenderPass m_renderPass;
 

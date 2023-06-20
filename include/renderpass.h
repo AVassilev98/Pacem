@@ -24,6 +24,43 @@ class RenderPass
     std::vector<std::function<void(VkCommandBuffer, uint32_t)>> m_dependencies;
 };
 
+class EditorRenderPass : public RenderPass
+{
+  public:
+    virtual void resize(uint32_t width, uint32_t height) override;
+    virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
+
+  public:
+    EditorRenderPass(const std::span<Shader *> &shaders);
+    ~EditorRenderPass();
+    Pipeline m_pipeline;
+
+    std::vector<Image> m_multisampledImages;
+    std::vector<Image> m_depthImages;
+
+  private:
+    struct LineAttribute
+    {
+        glm::vec3 offset;
+    };
+    struct LineVertex
+    {
+        glm::vec3 position;
+        glm::vec3 color;
+    };
+    struct Line
+    {
+        LineVertex A;
+        LineVertex B;
+    };
+
+  private:
+    Buffer m_vertexBuffer;
+    Buffer m_instanceBuffer;
+    void createLines();
+    void createFrameBuffers(VkRenderPass renderPass);
+};
+
 class MainRenderPass : public RenderPass
 {
   public:
@@ -34,7 +71,7 @@ class MainRenderPass : public RenderPass
     MainRenderPass(const std::span<Shader *> &shaders);
     ~MainRenderPass();
     Pipeline m_pipeline;
-    std::vector<Image> m_outputImages;
+    std::vector<Image *> m_outputImages;
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);

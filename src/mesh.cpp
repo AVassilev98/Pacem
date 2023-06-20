@@ -109,28 +109,28 @@ Mesh::Mesh(const std::string &path, const Pipeline &pipeline)
         {
             printf("Found diffuse texture: %s in texture map!\n", diffusePath.C_Str());
             Image &diffuseTexture = textures.at(std::string(diffusePath.C_Str()));
-            descriptorImageInfo.imageView = diffuseTexture.m_imageView;
+            descriptorImageInfo.imageView = diffuseTexture.getImageViewByFormat();
             renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 0);
         }
         if (textures.count(std::string(aoPath.C_Str())))
         {
             printf("Found ambient occlusion texture: %s in texture map!\n", aoPath.C_Str());
             Image &aoTexture = textures.at(std::string(aoPath.C_Str()));
-            descriptorImageInfo.imageView = aoTexture.m_imageView;
+            descriptorImageInfo.imageView = aoTexture.getImageViewByFormat();
             renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 1);
         }
         if (textures.count(std::string(emissivePath.C_Str())))
         {
             printf("Found emissive texture: %s in texture map!\n", emissivePath.C_Str());
             Image &emissiveTexture = textures.at(std::string(emissivePath.C_Str()));
-            descriptorImageInfo.imageView = emissiveTexture.m_imageView;
+            descriptorImageInfo.imageView = emissiveTexture.getImageViewByFormat();
             renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 2);
         }
         if (textures.count(std::string(normalPath.C_Str())))
         {
             printf("Found normal map: %s in texture map!\n", normalPath.C_Str());
             Image &normalTexture = textures.at(std::string(normalPath.C_Str()));
-            descriptorImageInfo.imageView = normalTexture.m_imageView;
+            descriptorImageInfo.imageView = normalTexture.getImageViewByFormat();
             renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 3);
         }
     }
@@ -219,7 +219,6 @@ Mesh::~Mesh()
     vkDestroySampler(renderer.m_deviceInfo.device, sampler, nullptr);
     for (auto &kv : textures)
     {
-        vkDestroyImageView(renderer.m_deviceInfo.device, kv.second.m_imageView, nullptr);
-        vmaDestroyImage(renderer.m_vmaAllocator, kv.second.m_image, kv.second.m_allocation);
+        kv.second.freeResources();
     }
 }

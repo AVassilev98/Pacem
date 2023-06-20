@@ -17,6 +17,8 @@ class Pipeline
             std::optional<VkViewport> viewport = {};
         };
 
+        VkBool32 enableDepthTest = VK_TRUE;
+        VkBool32 enableDepthWrite = VK_TRUE;
         const std::span<Shader *> &shaders;
         const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &layouts;
         const VkRenderPass &renderPass;

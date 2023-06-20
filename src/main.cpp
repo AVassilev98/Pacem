@@ -36,22 +36,22 @@ int main()
     Renderer &renderer = Renderer::Get();
     Gui &gui = Gui::Get();
 
-    std::string vertShaderPath = CONCAT(SHADER_PATH, "default.vert.spv");
-    std::string geoShaderPath = CONCAT(SHADER_PATH, "default.geom.spv");
-    std::string fragShaderPath = CONCAT(SHADER_PATH, "default.frag.spv");
+    Shader lineVertShader(CONCAT(SHADER_PATH, "lineDraw.vert.spv"), Shader::Stage::Vertex);
+    Shader lineFragShader(CONCAT(SHADER_PATH, "lineDraw.frag.spv"), Shader::Stage::Fragment);
 
-    std::string suzannePath = CONCAT(ASSET_PATH, "DamagedHelmet.glb");
+    Shader vertShader(CONCAT(SHADER_PATH, "default.vert.spv"), Shader::Stage::Vertex);
+    Shader geoShader(CONCAT(SHADER_PATH, "default.geom.spv"), Shader::Stage::Geometry);
+    Shader fragShader(CONCAT(SHADER_PATH, "default.frag.spv"), Shader::Stage::Fragment);
 
-    Shader vertShader(vertShaderPath, Shader::Stage::Vertex);
-    Shader geoShader(geoShaderPath, Shader::Stage::Geometry);
-    Shader fragShader(fragShaderPath, Shader::Stage::Fragment);
+    auto lineShaders = std::to_array({&lineVertShader, &lineFragShader});
+    auto mainShaders = std::to_array({&vertShader, &geoShader, &fragShader});
 
-    auto shadersp = std::to_array({&vertShader, &geoShader, &fragShader});
-
-    MainRenderPass mainRenderPass(shadersp);
-    Mesh suzanneMesh(suzannePath, mainRenderPass.m_pipeline);
+    EditorRenderPass editorRenderPass(lineShaders);
+    MainRenderPass mainRenderPass(mainShaders);
+    Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
     mainRenderPass.addMesh(&suzanneMesh);
 
+    // renderer.addRenderPass(&editorRenderPass);
     renderer.addRenderPass(&mainRenderPass);
     renderer.addRenderPass(&gui);
     gui.declareGammaDependency(mainRenderPass.m_outputImages);

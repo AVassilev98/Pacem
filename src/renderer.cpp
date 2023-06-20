@@ -269,10 +269,10 @@ const DeviceInfo Renderer::createDevice()
     deviceCreateInfo.queueCreateInfoCount = queueCreateInfos.size();
     deviceCreateInfo.pEnabledFeatures = &m_physDeviceInfo.deviceFeatures;
 
-    std::array<const char *, 1> requiredExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    constexpr auto requiredExtensions = std::to_array({VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
+                                                       VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, VK_KHR_MAINTENANCE_2_EXTENSION_NAME});
     deviceCreateInfo.enabledExtensionCount = requiredExtensions.size();
     deviceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
-
     DeviceInfo deviceInfo = {};
     VK_LOG_ERR(vkCreateDevice(m_physDeviceInfo.device, &deviceCreateInfo, nullptr, &deviceInfo.device));
 
@@ -331,8 +331,16 @@ SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HA
     glm::clamp((uint32_t)height, m_windowInfo.surfaceCapabilities.minImageExtent.height,
                m_windowInfo.surfaceCapabilities.maxImageExtent.height);
 
+    constexpr auto swapchainFormats = std::to_array({VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM});
+    VkImageFormatListCreateInfo formatListCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,
+        .viewFormatCount = swapchainFormats.size(),
+        .pViewFormats = swapchainFormats.data(),
+    };
+
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     swapchainCreateInfo.oldSwapchain = oldSwapchain;
+    swapchainCreateInfo.flags = VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
     swapchainCreateInfo.imageFormat = m_windowInfo.preferredSurfaceFormat.format;
     swapchainCreateInfo.imageColorSpace = m_windowInfo.preferredSurfaceFormat.colorSpace;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -346,6 +354,7 @@ SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HA
     swapchainCreateInfo.surface = m_windowInfo.surface;
     swapchainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.pNext = &formatListCreateInfo;
 
     std::vector<uint32_t> queueFamilyIndices;
     for (const auto &queueInfo : m_deviceInfo.queues)
@@ -515,6 +524,7 @@ std::vector<Image> Renderer::getSwapchainImages()
         images[i].m_image = vkImages[i];
         images[i].m_width = m_swapchainInfo.width;
         images[i].m_height = m_swapchainInfo.height;
+        images[i].m_aspectMask = subResourceRange.aspectMask;
 
         VkImageViewCreateInfo imageViewCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         imageViewCreateInfo.image = vkImages[i];
@@ -522,7 +532,9 @@ std::vector<Image> Renderer::getSwapchainImages()
         imageViewCreateInfo.format = m_windowInfo.preferredSurfaceFormat.format;
         imageViewCreateInfo.subresourceRange = subResourceRange;
 
-        VK_LOG_ERR(vkCreateImageView(m_deviceInfo.device, &imageViewCreateInfo, nullptr, &images[i].m_imageView));
+        VK_LOG_ERR(vkCreateImageView(m_deviceInfo.device, &imageViewCreateInfo, nullptr, &images[i].m_imageViews[0].second));
+        images[i].m_imageViews[0].first = m_windowInfo.preferredSurfaceFormat.format;
+        images[i].m_numImageViews = 1;
     }
 
     return images;
@@ -532,7 +544,10 @@ void Renderer::freeSwapchainImages()
 {
     for (Image &image : m_swapchainImages)
     {
-        vkDestroyImageView(m_deviceInfo.device, image.m_imageView, nullptr);
+        for (std::pair<VkFormat, VkImageView> &kv : image.m_imageViews)
+        {
+            vkDestroyImageView(m_deviceInfo.device, kv.second, nullptr);
+        }
     }
 }
 

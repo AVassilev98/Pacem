@@ -86,6 +86,9 @@ Pipeline::Pipeline(const State &state)
         .scissors = std::span(&scissor, 1),
         .dynamicStates = dynamicStates,
     };
+    pipelineState.depthStencilInfo.depthTestEnable = state.enableDepthTest;
+    pipelineState.depthStencilInfo.depthWriteEnable = state.enableDepthWrite;
+
     m_pipeline = VkInit::CreateVkPipeline(pipelineState);
     m_dynamicState = state.dynamicState;
 }

@@ -42,6 +42,8 @@ void Buffer::freeResources()
 Image::Image(const State &state)
     : m_width(state.width)
     , m_height(state.height)
+    , m_aspectMask(state.aspectMask)
+    , m_mutableFormat(state.mutableFormat)
 {
     Renderer &renderer = Renderer::Get();
 
@@ -69,29 +71,61 @@ Image::Image(const State &state)
         .allocation = allocationState,
     };
     m_image = VkInit::CreateVkImage(imageState);
+    addImageViewFormat(state.format);
+}
+
+void Image::addImageViewFormat(VkFormat format)
+{
+#if DEBUG
+    assert(format != VK_FORMAT_UNDEFINED && "Should not add undefined format view!");
+    if (m_numImageViews && !m_mutableFormat)
+    {
+        assert(m_mutableFormat && "An image view already exists for this immutable image!");
+    }
+
+    for (uint32_t i = 0; i < m_numImageViews; i++)
+    {
+        std::pair<VkFormat, VkImageView> &kv = m_imageViews[i];
+        assert(kv.first != format && "Should not add duplicate imageView!");
+    }
+#endif
 
     VkInit::ImageViewState imageViewState = {
         .image = m_image,
-        .format = state.format,
-        .aspectMask = state.aspectMask,
+        .format = format,
+        .aspectMask = m_aspectMask,
     };
-    m_imageView = VkInit::CreateVkImageView(imageViewState);
+    m_imageViews[m_numImageViews++] = {format, VkInit::CreateVkImageView(imageViewState)};
 }
 
-Image::Image(const CopyState &state)
-    : m_image(state.image)
-    , m_imageView(state.imageView)
-    , m_allocation(state.allocation)
-    , m_width(state.width)
-    , m_height(state.height)
+VkImageView Image::getImageViewByFormat(VkFormat format) const
 {
+    if (format == VK_FORMAT_MAX_ENUM)
+    {
+        return m_imageViews[0].second;
+    }
+
+    assert(format != VK_FORMAT_UNDEFINED && "Cannot get a view into undefined format");
+    for (uint32_t i = 0; i < m_numImageViews; i++)
+    {
+        const std::pair<VkFormat, VkImageView> &kv = m_imageViews[i];
+        if (format == kv.first)
+        {
+            return kv.second;
+        }
+    }
+    assert(0 && "Could not find imageview format!");
+    return VK_NULL_HANDLE;
 }
 
 void Image::freeResources()
 {
     Renderer &renderer = Renderer::Get();
 
-    vkDestroyImageView(renderer.m_deviceInfo.device, m_imageView, nullptr);
+    for (uint32_t i = 0; i < m_numImageViews; i++)
+    {
+        vkDestroyImageView(renderer.m_deviceInfo.device, m_imageViews[i].second, nullptr);
+    }
     vmaDestroyImage(renderer.m_vmaAllocator, m_image, m_allocation);
 }
 
@@ -103,11 +137,11 @@ Framebuffer::Framebuffer(const State &state)
 
     std::vector<VkImageView> attachments;
     attachments.reserve(state.images.size());
-    for (const Image *image : state.images)
+    for (const ImageRef &imageRef : state.images)
     {
-        attachments.push_back(image->m_imageView);
-        m_width = std::min(m_width, image->m_width);
-        m_height = std::min(m_height, image->m_height);
+        attachments.push_back(imageRef.image->getImageViewByFormat(imageRef.format));
+        m_width = std::min(m_width, imageRef.image->m_width);
+        m_height = std::min(m_height, imageRef.image->m_height);
     }
 
     VkInit::FramebufferState framebufferState = {

@@ -135,18 +135,26 @@ target_link_libraries(Pacem
 set(SHADER_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 
-file(GLOB SHADERS
-  ${SHADER_SOURCE_DIR}/*.vert
-  ${SHADER_SOURCE_DIR}/*.frag
-  ${SHADER_SOURCE_DIR}/*.comp
-  ${SHADER_SOURCE_DIR}/*.geom
-  ${SHADER_SOURCE_DIR}/*.tesc
-  ${SHADER_SOURCE_DIR}/*.tese
-  ${SHADER_SOURCE_DIR}/*.mesh
-  ${SHADER_SOURCE_DIR}/*.task
-  ${SHADER_SOURCE_DIR}/*.rgen
-  ${SHADER_SOURCE_DIR}/*.rchit
-  ${SHADER_SOURCE_DIR}/*.rmiss)
+
+set (SHADERS
+  ${SHADER_SOURCE_DIR}/default.frag
+  ${SHADER_SOURCE_DIR}/default.geom
+  ${SHADER_SOURCE_DIR}/default.vert
+  ${SHADER_SOURCE_DIR}/lineDraw.vert
+  ${SHADER_SOURCE_DIR}/lineDraw.frag
+)
+# file(GLOB SHADERS
+#   ${SHADER_SOURCE_DIR}/*.vert
+#   ${SHADER_SOURCE_DIR}/*.frag
+#   ${SHADER_SOURCE_DIR}/*.comp
+#   ${SHADER_SOURCE_DIR}/*.geom
+#   ${SHADER_SOURCE_DIR}/*.tesc
+#   ${SHADER_SOURCE_DIR}/*.tese
+#   ${SHADER_SOURCE_DIR}/*.mesh
+#   ${SHADER_SOURCE_DIR}/*.task
+#   ${SHADER_SOURCE_DIR}/*.rgen
+#   ${SHADER_SOURCE_DIR}/*.rchit
+#   ${SHADER_SOURCE_DIR}/*.rmiss)
 
 add_custom_command(
   COMMAND

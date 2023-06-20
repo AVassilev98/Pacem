@@ -42,27 +42,32 @@ struct Image
         VmaMemoryUsage vmaUsage = VMA_MEMORY_USAGE_AUTO;
         VmaAllocationCreateFlags vmaFlags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        bool mutableFormat = false;
     };
     Image(const State &state);
 
-    struct CopyState
-    {
-        const VkImage &image;
-        const VkImageView &imageView;
-        const VmaAllocation &allocation;
-        const uint32_t &width;
-        const uint32_t &height;
-    };
-    Image(const CopyState &state);
     Image(const Image &image) = default;
+    void addImageViewFormat(VkFormat format);
+    VkImageView getImageViewByFormat(VkFormat format = VK_FORMAT_MAX_ENUM) const;
     void freeResources();
 
+    VkImageAspectFlags m_aspectMask;
     VkImage m_image;
-    VkImageView m_imageView;
     VmaAllocation m_allocation;
     VmaAllocationInfo m_allocationInfo;
     uint32_t m_width;
     uint32_t m_height;
+    bool m_mutableFormat;
+
+    static constexpr uint32_t MaxImageViewTypes = 3;
+    uint32_t m_numImageViews = 0;
+    std::array<std::pair<VkFormat, VkImageView>, MaxImageViewTypes> m_imageViews = {};
+};
+
+struct ImageRef
+{
+    VkFormat format;
+    Image *image;
 };
 
 struct Framebuffer
@@ -70,7 +75,7 @@ struct Framebuffer
     Framebuffer() = default;
     struct State
     {
-        const std::span<Image *> &images;
+        const std::span<ImageRef> &images;
         const VkRenderPass &renderpass;
     };
     Framebuffer(const State &state);

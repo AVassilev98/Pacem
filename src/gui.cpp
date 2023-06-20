@@ -28,7 +28,10 @@ void Gui::createFrameBuffers(VkRenderPass renderPass)
     for (int i = 0; i < maxFramesInFlight; i++)
     {
         m_swapchainImages.emplace_back(&renderer.m_swapchainImages[i]);
-        auto attachments = std::to_array({m_swapchainImages[i]});
+        auto attachments = std::to_array<ImageRef>({
+            {VK_FORMAT_B8G8R8A8_UNORM, m_swapchainImages[i]},
+        });
+        m_swapchainImages[i]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
 
         Framebuffer::State framebufferState = {
             .images = std::span(attachments),
@@ -182,9 +185,9 @@ Gui::Gui()
     VkInit::RenderPassState::Attachment colorAttachment = {
         .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .format = renderer.m_windowInfo.preferredSurfaceFormat.format,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -292,58 +295,11 @@ void Gui::setImGuiDockspace()
     ImGui::End();
 }
 
-void Gui::declareGammaDependency(const std::vector<Image> &input)
+void Gui::declareGammaDependency(const std::vector<Image *> &input)
 {
-    auto dependencyExecutor = [&](VkCommandBuffer buffer, uint32_t frameIdx) -> void
-    {
-        assert(input[frameIdx].m_width == m_swapchainImages[frameIdx]->m_width && "Image widths must match to blit!");
-        assert(input[frameIdx].m_height == m_swapchainImages[frameIdx]->m_height && "Image heights must match to blit!");
-
-        constexpr VkImageSubresourceLayers subresourceDescription = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel = 0,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        };
-
-        constexpr VkOffset3D offsetBase = {
-            .x = 0,
-            .y = 0,
-            .z = 0,
-        };
-        VkOffset3D offsetExtent = {
-            .x = static_cast<int32_t>(m_swapchainImages[frameIdx]->m_width),
-            .y = static_cast<int32_t>(m_swapchainImages[frameIdx]->m_height),
-            .z = 1,
-        };
-
-        VkImageBlit blit = {
-            .srcSubresource = subresourceDescription,
-            .srcOffsets = {offsetBase, offsetExtent},
-            .dstSubresource = subresourceDescription,
-            .dstOffsets = {offsetBase, offsetExtent},
-        };
-
-        VkImageMemoryBarrier barrier = {};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = m_swapchainImages[frameIdx]->m_image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-
-        vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
-                             nullptr, 1, &barrier);
-
-        vkCmdBlitImage(buffer, input[frameIdx].m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_swapchainImages[frameIdx]->m_image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
-    };
-    m_dependencies.push_back(dependencyExecutor);
+    // auto dependencyExecutor = [&](VkCommandBuffer buffer, uint32_t frameIdx) -> void
+    // {
+    //     m_swapchainImages[frameIdx]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
+    // };
+    // m_dependencies.push_back(dependencyExecutor);
 }
