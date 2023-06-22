@@ -66,7 +66,7 @@ VkPipelineLayout VkInit::CreateVkPipelineLayout(const std::span<VkDescriptorSetL
     return pipelineLayout;
 }
 
-VkPipeline VkInit::CreateVkPipeline(const PipelineState &state)
+VkPipeline VkInit::CreateVkGraphicsPipeline(const GraphicsPipelineState &state)
 {
     Renderer &renderer = Renderer::Get();
 

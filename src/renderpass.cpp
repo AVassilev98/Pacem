@@ -161,7 +161,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
     colorBlendAttachmentState.colorWriteMask
         = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-    Pipeline::State pipelineState = {
+    GraphicsPipeline::State pipelineState = {
         .shaders = shaders,
         .layouts = descriptorSetLayouts,
         .renderPass = renderPass,
@@ -170,7 +170,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .vertexAttributeDescription = vertexAttributeDescriptions,
         .sampleCount = renderer.m_numSamples,
     };
-    m_pipeline = std::move(Pipeline(pipelineState));
+    m_pipeline = std::move(GraphicsPipeline(pipelineState));
 }
 
 void MainRenderPass::resize(uint32_t width, uint32_t height)
@@ -386,7 +386,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
 
     createFrameBuffers(renderPass);
 
-    Pipeline::State pipelineState = {
+    GraphicsPipeline::State pipelineState = {
         .enableDepthTest = VK_FALSE,
         .shaders = shaders,
         .layouts = descriptorSetLayouts,
@@ -397,7 +397,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
         .vertexAttributeDescription = vertexAttributeDescriptions,
         .sampleCount = Renderer::Get().m_numSamples,
     };
-    m_pipeline = std::move(Pipeline(pipelineState));
+    m_pipeline = std::move(GraphicsPipeline(pipelineState));
 }
 
 EditorRenderPass::~EditorRenderPass()

@@ -6,7 +6,7 @@
 
 struct Mesh
 {
-    Mesh(const std::string &path, const Pipeline &pipeline);
+    Mesh(const std::string &path, const GraphicsPipeline &pipeline);
     ~Mesh();
 
     VkSampler sampler;
@@ -29,7 +29,7 @@ struct Mesh
     // Per Material
     std::vector<VkDescriptorSet> matDescriptorSets;
 
-    const Pipeline &m_parentPipeline;
+    const GraphicsPipeline &m_parentPipeline;
 
     void drawMesh(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout);
 };

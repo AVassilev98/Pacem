@@ -35,7 +35,7 @@ namespace
     }
 }; // namespace
 
-Mesh::Mesh(const std::string &path, const Pipeline &pipeline)
+Mesh::Mesh(const std::string &path, const GraphicsPipeline &pipeline)
     : m_parentPipeline(pipeline)
 {
     Renderer &renderer = Renderer::Get();

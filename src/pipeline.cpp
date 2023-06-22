@@ -9,7 +9,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-Pipeline::Pipeline(const State &state)
+GraphicsPipeline::GraphicsPipeline(const State &state)
     : m_renderPass(state.renderPass)
 {
     constexpr unsigned maxShadersInPipeline = 5;
@@ -74,7 +74,7 @@ Pipeline::Pipeline(const State &state)
         VK_DYNAMIC_STATE_SCISSOR,
     });
 
-    VkInit::PipelineState pipelineState = {
+    VkInit::GraphicsPipelineState pipelineState = {
         .layout = m_pipelineLayout,
         .renderPass = state.renderPass,
         .shaderInfo = std::span(shaderStages.data(), numShaderStages),
@@ -89,11 +89,11 @@ Pipeline::Pipeline(const State &state)
     pipelineState.depthStencilInfo.depthTestEnable = state.enableDepthTest;
     pipelineState.depthStencilInfo.depthWriteEnable = state.enableDepthWrite;
 
-    m_pipeline = VkInit::CreateVkPipeline(pipelineState);
+    m_pipeline = VkInit::CreateVkGraphicsPipeline(pipelineState);
     m_dynamicState = state.dynamicState;
 }
 
-void Pipeline::freeResources()
+void GraphicsPipeline::freeResources()
 {
     Renderer &renderer = Renderer::Get();
 

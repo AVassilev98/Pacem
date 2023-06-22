@@ -33,7 +33,7 @@ class EditorRenderPass : public RenderPass
   public:
     EditorRenderPass(const std::span<Shader *> &shaders);
     ~EditorRenderPass();
-    Pipeline m_pipeline;
+    GraphicsPipeline m_pipeline;
 
     std::vector<Image> m_multisampledImages;
     std::vector<Image> m_depthImages;
@@ -71,7 +71,7 @@ class MainRenderPass : public RenderPass
   public:
     MainRenderPass(const std::span<Shader *> &shaders);
     ~MainRenderPass();
-    Pipeline m_pipeline;
+    GraphicsPipeline m_pipeline;
     std::vector<Image *> m_outputImages;
 
   private:

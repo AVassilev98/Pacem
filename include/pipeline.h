@@ -6,7 +6,7 @@
 #include <span>
 #include <vulkan/vulkan_core.h>
 
-class Pipeline
+class GraphicsPipeline
 {
   public:
     struct State
@@ -29,8 +29,8 @@ class Pipeline
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
         Dynamic dynamicState = {};
     };
-    Pipeline(const State &state);
-    Pipeline() = default;
+    GraphicsPipeline(const State &state);
+    GraphicsPipeline() = default;
 
   public:
     VkPipelineLayout m_pipelineLayout;

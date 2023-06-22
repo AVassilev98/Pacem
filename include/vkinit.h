@@ -18,7 +18,7 @@ struct VkInit
     static VkPipelineLayout CreateVkPipelineLayout(const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &dsl,
                                                    std::span<VkPushConstantRange> pushRanges);
 
-    struct PipelineState
+    struct GraphicsPipelineState
     {
         const VkPipelineLayout &layout;
         const VkRenderPass &renderPass;
@@ -77,7 +77,7 @@ struct VkInit
         const std::span<VkRect2D> &scissors;
         const std::span<VkDynamicState> &dynamicStates;
     };
-    static VkPipeline CreateVkPipeline(const PipelineState &pipelineState);
+    static VkPipeline CreateVkGraphicsPipeline(const GraphicsPipelineState &pipelineState);
 
     struct RenderPassState
     {
