@@ -51,10 +51,12 @@ int main()
     Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
     mainRenderPass.addMesh(&suzanneMesh);
 
-    // renderer.addRenderPass(&editorRenderPass);
+    renderer.addRenderPass(&editorRenderPass);
+
     renderer.addRenderPass(&mainRenderPass);
+    mainRenderPass.declareImageDependency(editorRenderPass.m_multisampledImages, editorRenderPass.m_depthImages);
+
     renderer.addRenderPass(&gui);
-    gui.declareGammaDependency(mainRenderPass.m_outputImages);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;

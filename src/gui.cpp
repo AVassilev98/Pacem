@@ -294,12 +294,3 @@ void Gui::setImGuiDockspace()
     ImGui::PopStyleVar(3);
     ImGui::End();
 }
-
-void Gui::declareGammaDependency(const std::vector<Image *> &input)
-{
-    // auto dependencyExecutor = [&](VkCommandBuffer buffer, uint32_t frameIdx) -> void
-    // {
-    //     m_swapchainImages[frameIdx]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
-    // };
-    // m_dependencies.push_back(dependencyExecutor);
-}

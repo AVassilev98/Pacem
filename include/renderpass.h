@@ -66,6 +66,7 @@ class MainRenderPass : public RenderPass
   public:
     virtual void resize(uint32_t width, uint32_t height) override;
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
+    void declareImageDependency(std::vector<Image> &colorImages, std::vector<Image> &depthImages);
 
   public:
     MainRenderPass(const std::span<Shader *> &shaders);
@@ -75,6 +76,6 @@ class MainRenderPass : public RenderPass
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);
-    std::vector<Image> m_multisampledImages;
-    std::vector<Image> m_depthImages;
+    std::vector<Image *> m_multisampledImages;
+    std::vector<Image *> m_depthImages;
 };
