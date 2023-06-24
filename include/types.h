@@ -1,5 +1,6 @@
 #pragma once
 #include "GLFW/glfw3.h"
+#include "glm/fwd.hpp"
 #include "vma.h"
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
@@ -61,7 +62,8 @@ struct Vertex
 struct PushConstants
 {
     glm::mat4 M;
-    glm::mat4 VP;
+    glm::mat4 V;
+    glm::mat4 P;
 };
 
 struct DepthBuffer

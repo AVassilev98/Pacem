@@ -1,4 +1,5 @@
 #include "GLFW/glfw3.h"
+#include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/glm.hpp"
 #include "gpuresource.h"
@@ -75,7 +76,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
-        .samples = Renderer::Get().m_numSamples,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
@@ -84,7 +85,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .format = VK_FORMAT_D32_SFLOAT,
-        .samples = Renderer::Get().m_numSamples,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 1,
         .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
@@ -168,6 +169,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
         .pushConstantRanges = std::span(&range, 1),
         .vertexBindingDescription = vertexBindingDescriptions,
         .vertexAttributeDescription = vertexAttributeDescriptions,
+        .colorBlendAttachmentState = colorBlendAttachmentState,
         .sampleCount = renderer.m_numSamples,
     };
     m_pipeline = std::move(GraphicsPipeline(pipelineState));
@@ -206,7 +208,8 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 
     PushConstants pushConstants = {};
     pushConstants.M = model;
-    pushConstants.VP = projection * view;
+    pushConstants.V = view;
+    pushConstants.P = projection;
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
@@ -320,7 +323,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
-        .samples = Renderer::Get().m_numSamples,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
@@ -329,7 +332,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .format = VK_FORMAT_D32_SFLOAT,
-        .samples = Renderer::Get().m_numSamples,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 1,
         .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
@@ -346,56 +349,46 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
             .stride = sizeof(LineVertex),
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
         },
-        VkVertexInputBindingDescription{
-            .binding = 1,
-            .stride = sizeof(glm::vec3),
-            .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
-        },
     });
 
-    auto vertexAttributeDescriptions = std::to_array({
+    auto vertexAttributeDescriptions = std::to_array<VkVertexInputAttributeDescription>({
         VkVertexInputAttributeDescription{
             .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = offsetof(LineVertex, position),
         },
-        VkVertexInputAttributeDescription{
-            .location = 1,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = offsetof(LineVertex, color),
-        },
-        VkVertexInputAttributeDescription{
-            .location = 2,
-            .binding = 1,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = 0,
-        },
     });
 
     VkPushConstantRange range;
     range.offset = 0;
     range.size = sizeof(PushConstants);
-    range.stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
-    colorBlendAttachmentState.blendEnable = VK_FALSE;
-    colorBlendAttachmentState.colorWriteMask
-        = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    };
 
     createFrameBuffers(renderPass);
 
     GraphicsPipeline::State pipelineState = {
-        .enableDepthTest = VK_FALSE,
+        .enableDepthTest = VK_TRUE,
         .shaders = shaders,
         .layouts = descriptorSetLayouts,
         .renderPass = renderPass,
         .pushConstantRanges = std::span(&range, 1),
         .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-        .vertexBindingDescription = vertexBindingDescriptions,
-        .vertexAttributeDescription = vertexAttributeDescriptions,
-        .sampleCount = Renderer::Get().m_numSamples,
+        .vertexBindingDescription = std::span<VkVertexInputBindingDescription>(),
+        .vertexAttributeDescription = std::span<VkVertexInputAttributeDescription>(),
+        .colorBlendAttachmentState = colorBlendAttachmentState,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
     };
     m_pipeline = std::move(GraphicsPipeline(pipelineState));
 }
@@ -431,7 +424,8 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
 
     PushConstants pushConstants = {};
     pushConstants.M = model;
-    pushConstants.VP = projection * view;
+    pushConstants.V = view;
+    pushConstants.P = projection;
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
@@ -465,6 +459,9 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
     VkSubpassContents subpassContents = {};
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, subpassContents);
+    vkCmdPushConstants(commandBuffer, m_pipeline.m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.m_pipeline);
+    vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 }

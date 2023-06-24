@@ -18,7 +18,8 @@ layout(location = 3) in vec3 vertPosition[];
 layout(push_constant) uniform constants
 {
     mat4 model;
-    mat4 vp;
+    mat4 view;
+    mat4 projection;
 }
 PushConstants;
 
@@ -47,7 +48,7 @@ void main()
     // TBN is an orthogonal matrix and so its inverse is equal to its transpose
     TBN = transpose(TBN);
 
-    const mat4 MVP = PushConstants.vp * PushConstants.model;
+    const mat4 MVP = PushConstants.projection * PushConstants.view * PushConstants.model;
 
     gl_Position = MVP * gl_in[0].gl_Position;
     Normal = vec3(MVP * vec4(vertNormal[0], 1.0f));

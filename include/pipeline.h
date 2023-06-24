@@ -26,6 +26,7 @@ class GraphicsPipeline
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         const std::span<VkVertexInputBindingDescription> &vertexBindingDescription;
         const std::span<VkVertexInputAttributeDescription> &vertexAttributeDescription;
+        const VkPipelineColorBlendAttachmentState &colorBlendAttachmentState;
         VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
         Dynamic dynamicState = {};
     };

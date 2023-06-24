@@ -87,7 +87,7 @@ VkInstance Renderer::createInstance()
     }
 
     VkApplicationInfo appInfo = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
-    appInfo.pApplicationName = "Para-ray";
+    appInfo.pApplicationName = "Pacem";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "No Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -174,7 +174,7 @@ const WindowInfo Renderer::createWindow()
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
-    windowInfo.window = glfwCreateWindow(1920, 1080, "Pararay", nullptr, nullptr);
+    windowInfo.window = glfwCreateWindow(1920, 1080, "Pacem", nullptr, nullptr);
 
     VK_LOG_ERR(glfwCreateWindowSurface(m_instance, windowInfo.window, nullptr, &windowInfo.surface));
 
@@ -396,10 +396,10 @@ VkSampleCountFlagBits Renderer::getMaxSamples()
         std::cout << "Max sample count is 16xMSAA" << std::endl;
         return VK_SAMPLE_COUNT_16_BIT;
     }
-    else if (counts & VK_SAMPLE_COUNT_8_BIT)
+    else if (counts & VK_SAMPLE_COUNT_1_BIT)
     {
         std::cout << "Max sample count is 8xMSAA" << std::endl;
-        return VK_SAMPLE_COUNT_8_BIT;
+        return VK_SAMPLE_COUNT_1_BIT;
     }
     else if (counts & VK_SAMPLE_COUNT_4_BIT)
     {

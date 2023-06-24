@@ -36,12 +36,12 @@ int main()
     Renderer &renderer = Renderer::Get();
     Gui &gui = Gui::Get();
 
-    Shader lineVertShader(CONCAT(SHADER_PATH, "lineDraw.vert.spv"), Shader::Stage::Vertex);
-    Shader lineFragShader(CONCAT(SHADER_PATH, "lineDraw.frag.spv"), Shader::Stage::Fragment);
+    Shader lineVertShader(CONCAT(SHADER_PATH, "editorGrid.vert.spv"), Shader::Stage::Vertex);
+    Shader lineFragShader(CONCAT(SHADER_PATH, "editorGrid.frag.spv"), Shader::Stage::Fragment);
 
-    Shader vertShader(CONCAT(SHADER_PATH, "default.vert.spv"), Shader::Stage::Vertex);
-    Shader geoShader(CONCAT(SHADER_PATH, "default.geom.spv"), Shader::Stage::Geometry);
-    Shader fragShader(CONCAT(SHADER_PATH, "default.frag.spv"), Shader::Stage::Fragment);
+    Shader vertShader(CONCAT(SHADER_PATH, "mainPass.vert.spv"), Shader::Stage::Vertex);
+    Shader geoShader(CONCAT(SHADER_PATH, "mainPass.geom.spv"), Shader::Stage::Geometry);
+    Shader fragShader(CONCAT(SHADER_PATH, "mainPass.frag.spv"), Shader::Stage::Fragment);
 
     auto lineShaders = std::to_array({&lineVertShader, &lineFragShader});
     auto mainShaders = std::to_array({&vertShader, &geoShader, &fragShader});

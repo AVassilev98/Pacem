@@ -137,11 +137,11 @@ set(SHADER_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 
 
 set (SHADERS
-  ${SHADER_SOURCE_DIR}/default.frag
-  ${SHADER_SOURCE_DIR}/default.geom
-  ${SHADER_SOURCE_DIR}/default.vert
-  ${SHADER_SOURCE_DIR}/lineDraw.vert
-  ${SHADER_SOURCE_DIR}/lineDraw.frag
+  ${SHADER_SOURCE_DIR}/mainPass.frag
+  ${SHADER_SOURCE_DIR}/mainPass.geom
+  ${SHADER_SOURCE_DIR}/mainPass.vert
+  ${SHADER_SOURCE_DIR}/editorGrid.vert
+  ${SHADER_SOURCE_DIR}/editorGrid.frag
 )
 # file(GLOB SHADERS
 #   ${SHADER_SOURCE_DIR}/*.vert

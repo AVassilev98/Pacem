@@ -34,17 +34,12 @@ GraphicsPipeline::GraphicsPipeline(const State &state)
         .patchControlPoints = 0,
     };
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachmentStateInfo = {
-        .blendEnable = VK_FALSE,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-    };
-
     VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .logicOpEnable = VK_FALSE,
         .logicOp = VK_LOGIC_OP_COPY,
         .attachmentCount = 1,
-        .pAttachments = &colorBlendAttachmentStateInfo,
+        .pAttachments = &state.colorBlendAttachmentState,
     };
 
     VkPipelineMultisampleStateCreateInfo msaaStateInfo = {
