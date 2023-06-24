@@ -16,6 +16,7 @@
 #define VMA_IMPLEMENTATION
 #include "vma.h"
 
+#include "camera.h"
 #include "common.h"
 #include "gui.h"
 #include "pipeline.h"
@@ -46,8 +47,10 @@ int main()
     auto lineShaders = std::to_array({&lineVertShader, &lineFragShader});
     auto mainShaders = std::to_array({&vertShader, &geoShader, &fragShader});
 
-    EditorRenderPass editorRenderPass(lineShaders);
-    MainRenderPass mainRenderPass(mainShaders);
+    UserControlledCamera mainCamera;
+
+    EditorRenderPass editorRenderPass(lineShaders, mainCamera);
+    MainRenderPass mainRenderPass(mainShaders, mainCamera);
     Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
     mainRenderPass.addMesh(&suzanneMesh);
 
@@ -63,6 +66,7 @@ int main()
 
     while (!renderer.exitSignal())
     {
+        mainCamera.update();
         VkResult drawStatus = renderer.draw();
 
         double currentTime = glfwGetTime();

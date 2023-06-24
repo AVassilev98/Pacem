@@ -1,7 +1,7 @@
 #version 450
 
-const float near = 1; // 0.01
-const float far = 10; // 100
+const float near = 0.01; // 0.01
+const float far = 10;    // 100
 const float epsilon = 0.0001;
 layout(location = 2) in vec3 nearPoint;
 layout(location = 3) in vec3 farPoint;

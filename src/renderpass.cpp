@@ -53,7 +53,8 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
     }
 }
 
-MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders)
+MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
+    : m_cameraRef(camera)
 {
     Renderer &renderer = Renderer::Get();
 
@@ -189,21 +190,10 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
     static uint32_t frameCount = 0;
     Renderer &renderer = Renderer::Get();
 
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 projection;
-    {
-        glm::vec3 camPos = {0.f, -1.f, -4.f};
-
-        view = glm::translate(glm::mat4(1.f), camPos);
-        // camera projection
-        projection = glm::perspective(glm::radians(70.f), 1700.f / 900.f, 1.0f, 5000.0f);
-        projection[1][1] *= -1;
-        // model rotation
-        model = glm::rotate(glm::mat4{1.0f}, glm::radians(frameCount * 0.005f), glm::vec3(0, 1, 0))
-              * glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1, 0, 0));
-    }
-
+    glm::mat4 model = glm::rotate(glm::mat4{1.0f}, glm::radians(frameCount * 0.005f), glm::vec3(0, 1, 0))
+                    * glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1, 0, 0));
+    glm::mat4 view = m_cameraRef.m_view;
+    glm::mat4 projection = m_cameraRef.m_projection;
     frameCount++;
 
     PushConstants pushConstants = {};
@@ -310,7 +300,8 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
     }
 }
 
-EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
+EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
+    : m_cameraRef(camera)
 {
     std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> descriptorSetLayouts;
     descriptorSetLayouts[DSL_FREQ_PER_FRAME] = VkInit::CreateEmptyVkDescriptorSetLayout();
@@ -342,23 +333,6 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders)
         .depthAttachment = &depth,
     };
     VkRenderPass renderPass = VkInit::CreateVkRenderPass(renderPassState);
-
-    auto vertexBindingDescriptions = std::to_array({
-        VkVertexInputBindingDescription{
-            .binding = 0,
-            .stride = sizeof(LineVertex),
-            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-        },
-    });
-
-    auto vertexAttributeDescriptions = std::to_array<VkVertexInputAttributeDescription>({
-        VkVertexInputAttributeDescription{
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = offsetof(LineVertex, position),
-        },
-    });
 
     VkPushConstantRange range;
     range.offset = 0;
@@ -408,18 +382,8 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
 {
     static uint32_t frameCount = 0;
     glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 projection;
-    {
-        glm::vec3 camPos = {0.f, -1.f, -4.f};
-
-        view = glm::translate(glm::mat4(1.f), camPos);
-        // camera projection
-        projection = glm::perspective(glm::radians(70.f), 1700.f / 900.f, 1.0f, 5000.0f);
-        projection[1][1] *= -1;
-        // model rotation
-    }
-
+    glm::mat4 view = m_cameraRef.m_view;
+    glm::mat4 projection = m_cameraRef.m_projection;
     frameCount++;
 
     PushConstants pushConstants = {};

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "camera.h"
 #include "mesh.h"
 #include "pipeline.h"
 #include <functional>
@@ -31,7 +32,7 @@ class EditorRenderPass : public RenderPass
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
 
   public:
-    EditorRenderPass(const std::span<Shader *> &shaders);
+    EditorRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
     ~EditorRenderPass();
     GraphicsPipeline m_pipeline;
 
@@ -39,25 +40,7 @@ class EditorRenderPass : public RenderPass
     std::vector<Image> m_depthImages;
 
   private:
-    struct LineAttribute
-    {
-        glm::vec3 offset;
-    };
-    struct LineVertex
-    {
-        glm::vec3 position;
-        glm::vec3 color;
-    };
-    struct Line
-    {
-        LineVertex A;
-        LineVertex B;
-    };
-
-  private:
-    Buffer m_vertexBuffer;
-    Buffer m_instanceBuffer;
-    void createLines();
+    const UserControlledCamera &m_cameraRef;
     void createFrameBuffers(VkRenderPass renderPass);
 };
 
@@ -69,7 +52,7 @@ class MainRenderPass : public RenderPass
     void declareImageDependency(std::vector<Image> &colorImages, std::vector<Image> &depthImages);
 
   public:
-    MainRenderPass(const std::span<Shader *> &shaders);
+    MainRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
     ~MainRenderPass();
     GraphicsPipeline m_pipeline;
     std::vector<Image *> m_outputImages;
@@ -78,4 +61,5 @@ class MainRenderPass : public RenderPass
     void createFrameBuffers(VkRenderPass renderPass);
     std::vector<Image *> m_multisampledImages;
     std::vector<Image *> m_depthImages;
+    const UserControlledCamera &m_cameraRef;
 };
