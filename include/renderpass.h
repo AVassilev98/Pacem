@@ -36,7 +36,7 @@ class EditorRenderPass : public RenderPass
     ~EditorRenderPass();
     GraphicsPipeline m_pipeline;
 
-    std::vector<Image> m_multisampledImages;
+    std::vector<Image *> m_multisampledImages;
     std::vector<Image> m_depthImages;
 
   private:
@@ -49,17 +49,16 @@ class MainRenderPass : public RenderPass
   public:
     virtual void resize(uint32_t width, uint32_t height) override;
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
-    void declareImageDependency(std::vector<Image> &colorImages, std::vector<Image> &depthImages);
+    void declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages);
 
   public:
     MainRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
     ~MainRenderPass();
     GraphicsPipeline m_pipeline;
-    std::vector<Image *> m_outputImages;
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);
-    std::vector<Image *> m_multisampledImages;
+    std::vector<Image *> m_outputImages;
     std::vector<Image *> m_depthImages;
     const UserControlledCamera &m_cameraRef;
 };

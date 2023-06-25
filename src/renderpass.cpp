@@ -38,11 +38,10 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
     QueueFamily imageFamily = QueueFamily::Graphics;
     for (int i = 0; i < maxFramesInFlight; i++)
     {
-        m_outputImages[i] = &renderer.m_swapchainImages[i];
+        m_outputImages[i] = &Renderer::Get().m_swapchainImages[i];
         auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_SRGB, m_multisampledImages[i]},
-            {VK_FORMAT_D32_SFLOAT, m_depthImages[i]},
             {VK_FORMAT_B8G8R8A8_SRGB, m_outputImages[i]},
+            {VK_FORMAT_D32_SFLOAT, m_depthImages[i]},
         });
 
         Framebuffer::State framebufferState = {
@@ -75,7 +74,7 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserCon
         .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
@@ -90,31 +89,10 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserCon
         .attachment = 1,
         .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
-    VkInit::RenderPassState::Attachment resolve = {
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .format = VK_FORMAT_B8G8R8A8_SRGB,
-        .attachment = 2,
-        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    // auto subpassDependencies = std::to_array({
-    //     VkInit::RenderPassState::SubpassDependency{
-    //         .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    //         .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    //         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    //     },
-    //     VkInit::RenderPassState::SubpassDependency{
-    //         .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-    //         .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-    //         .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-    //     },
-    // });
 
     VkInit::RenderPassState renderPassState = {
         .colorAttachments = std::span(&color, 1),
         .depthAttachment = &depth,
-        .resolveAttachments = std::span(&resolve, 1),
     };
     VkRenderPass renderPass = VkInit::CreateVkRenderPass(renderPassState);
 
@@ -264,15 +242,6 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
     m_depthImages.reserve(maxFramesInFlight);
 
     QueueFamily imageFamily = QueueFamily::Graphics;
-    Image::State msaaState = {
-        .width = swapchainInfo.width,
-        .height = swapchainInfo.height,
-        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .format = VK_FORMAT_B8G8R8A8_SRGB,
-        .families = {&imageFamily, 1},
-        .samples = renderer.m_numSamples,
-    };
-
     Image::State depthBufState = {
         .width = swapchainInfo.width,
         .height = swapchainInfo.height,
@@ -285,10 +254,10 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
 
     for (uint32_t i = 0; i < maxFramesInFlight; i++)
     {
-        m_multisampledImages.push_back(msaaState);
+        m_multisampledImages.push_back(&Renderer::Get().m_swapchainImages[i]);
         m_depthImages.push_back(depthBufState);
         auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_SRGB, &m_multisampledImages[i]},
+            {VK_FORMAT_B8G8R8A8_SRGB, m_multisampledImages[i]},
             {VK_FORMAT_D32_SFLOAT, &m_depthImages[i]},
         });
 
@@ -372,7 +341,6 @@ EditorRenderPass::~EditorRenderPass()
     for (uint32_t i = 0; i < m_multisampledImages.size(); i++)
     {
         m_framebuffers[i].freeResources();
-        m_multisampledImages[i].freeResources();
         m_depthImages[i].freeResources();
     }
     m_pipeline.freeResources();
@@ -393,7 +361,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_multisampledImages[0].m_width, m_multisampledImages[0].m_height};
+    renderArea.extent = {m_multisampledImages[0]->m_width, m_multisampledImages[0]->m_height};
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
@@ -435,7 +403,6 @@ void EditorRenderPass::resize(uint32_t width, uint32_t height)
     for (uint32_t i = 0; i < m_multisampledImages.size(); i++)
     {
         m_framebuffers[i].freeResources();
-        m_multisampledImages[i].freeResources();
         m_depthImages[i].freeResources();
     }
     m_framebuffers.clear();
@@ -444,23 +411,17 @@ void EditorRenderPass::resize(uint32_t width, uint32_t height)
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
-void MainRenderPass::declareImageDependency(std::vector<Image> &colorImages, std::vector<Image> &depthImages)
+void MainRenderPass::declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages)
 {
     auto dependencyExecutor = [&](VkCommandBuffer, uint32_t) -> void
     {
         Renderer &renderer = Renderer::Get();
         bool frameBuffersDirty = false;
 
-        m_multisampledImages.resize(renderer.getMaxNumFramesInFlight());
         m_depthImages.resize(renderer.getMaxNumFramesInFlight());
 
         for (uint32_t i = 0; i < Renderer::Get().getMaxNumFramesInFlight(); i++)
         {
-            if (m_multisampledImages[i] != &colorImages[i])
-            {
-                frameBuffersDirty = true;
-                m_multisampledImages[i] = &colorImages[i];
-            }
             if (m_depthImages[i] != &depthImages[i])
             {
                 frameBuffersDirty = true;
