@@ -3,7 +3,6 @@
 #include <vulkan/vulkan_core.h>
 
 #include "mesh.h"
-#include "renderpass.h"
 #include "types.h"
 
 class Renderer
@@ -23,10 +22,32 @@ class Renderer
     void wait();
     ~Renderer();
 
-    VkDescriptorSet createDescriptorSet(VkDescriptorSetLayout layout);
     Buffer uploadBufferToGpu(VkBuffer src, Buffer::State &dstState);
     Image uploadImageToGpu(VkBuffer src, Image::State &dstState);
-    void updateDescriptor(VkDescriptorSet descriptorSet, const VkDescriptorImageInfo &descriptorImageInfo, uint32_t binding);
+
+    struct DescriptorUpdateState
+    {
+        const VkDescriptorSet &descriptorSet;
+        VkImageView imageView = VK_NULL_HANDLE;
+        const VkImageLayout &imageLayout;
+        const VkSampler &imageSampler;
+        uint32_t dstArrayElement = 0;
+        uint32_t binding = 0;
+        VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    };
+    void updateDescriptor(const DescriptorUpdateState &descriptorUpdateState);
+
+    struct DescriptorWriteState
+    {
+        const VkDescriptorSet &descriptorSet;
+        VkImageView imageView = VK_NULL_HANDLE;
+        const VkImageLayout &imageLayout;
+        const VkSampler &imageSampler;
+        uint32_t dstArrayElement = 0;
+        uint32_t binding = 0;
+        VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    };
+    void writeDescriptor(const DescriptorWriteState &descriptorUpdateState);
 
     void transferImmediate(std::function<void(VkCommandBuffer cmd)> &&function);
     void graphicsImmediate(std::function<void(VkCommandBuffer cmd)> &&function);

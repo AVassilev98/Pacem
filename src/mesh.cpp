@@ -100,38 +100,45 @@ Mesh::Mesh(const std::string &path, const GraphicsPipeline &pipeline)
         mat->GetTexture(aiTextureType_EMISSIVE, 0, &emissivePath);
         mat->GetTexture(aiTextureType_NORMALS, 0, &normalPath);
 
-        VkDescriptorImageInfo descriptorImageInfo = {};
-        descriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        descriptorImageInfo.sampler = sampler;
         matDescriptorSets.push_back(renderer.allocateDescriptorSet(m_parentPipeline.m_descriptorSetLayouts[DSL_FREQ_PER_MAT]));
+        Renderer::DescriptorUpdateState descriptorImageInfo = {
+            .descriptorSet = matDescriptorSets.back(),
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .imageSampler = sampler,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        };
 
         if (textures.count(std::string(diffusePath.C_Str())))
         {
             printf("Found diffuse texture: %s in texture map!\n", diffusePath.C_Str());
             Image &diffuseTexture = textures.at(std::string(diffusePath.C_Str()));
             descriptorImageInfo.imageView = diffuseTexture.getImageViewByFormat();
-            renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 0);
+            descriptorImageInfo.binding = 0;
+            renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(aoPath.C_Str())))
         {
             printf("Found ambient occlusion texture: %s in texture map!\n", aoPath.C_Str());
             Image &aoTexture = textures.at(std::string(aoPath.C_Str()));
             descriptorImageInfo.imageView = aoTexture.getImageViewByFormat();
-            renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 1);
+            descriptorImageInfo.binding = 1;
+            renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(emissivePath.C_Str())))
         {
             printf("Found emissive texture: %s in texture map!\n", emissivePath.C_Str());
             Image &emissiveTexture = textures.at(std::string(emissivePath.C_Str()));
             descriptorImageInfo.imageView = emissiveTexture.getImageViewByFormat();
-            renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 2);
+            descriptorImageInfo.binding = 2;
+            renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(normalPath.C_Str())))
         {
             printf("Found normal map: %s in texture map!\n", normalPath.C_Str());
             Image &normalTexture = textures.at(std::string(normalPath.C_Str()));
             descriptorImageInfo.imageView = normalTexture.getImageViewByFormat();
-            renderer.updateDescriptor(matDescriptorSets.back(), descriptorImageInfo, 3);
+            descriptorImageInfo.binding = 3;
+            renderer.updateDescriptor(descriptorImageInfo);
         }
     }
 

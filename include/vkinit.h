@@ -79,6 +79,13 @@ struct VkInit
     };
     static VkPipeline CreateVkGraphicsPipeline(const GraphicsPipelineState &pipelineState);
 
+    struct ComputePipelineState
+    {
+        const VkPipelineShaderStageCreateInfo &shader;
+        const VkPipelineLayout &layout;
+    };
+    static VkPipeline CreateVkComputePipeline(const ComputePipelineState &state);
+
     struct RenderPassState
     {
 

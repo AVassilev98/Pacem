@@ -1,4 +1,5 @@
 #include "GLFW/glfw3.h"
+#include "common.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/glm.hpp"
@@ -26,22 +27,45 @@ void RenderPass::fulfillRenderPassDependencies(VkCommandBuffer cmd, uint32_t fra
     }
 }
 
-void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
+void DeferredRenderPass::createFrameBuffers(VkRenderPass renderPass)
 {
     Renderer &renderer = Renderer::Get();
     uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
     const SwapchainInfo &swapchainInfo = renderer.getSwapchainInfo();
 
-    m_outputImages.resize(maxFramesInFlight);
     m_framebuffers.resize(maxFramesInFlight);
+    m_diffuseBuffers.resize(maxFramesInFlight);
+    m_normalBuffers.resize(maxFramesInFlight);
+    auto imageFamily = std::to_array<QueueFamily>({QueueFamily::Graphics});
 
-    QueueFamily imageFamily = QueueFamily::Graphics;
+    Image::State diffuseColorBufferState = {
+        .width = renderer.getSwapchainInfo().width,
+        .height = renderer.getSwapchainInfo().height,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .families = imageFamily,
+        .mutableFormat = false,
+    };
+
+    Image::State normalBufferState = {
+        .width = renderer.getSwapchainInfo().width,
+        .height = renderer.getSwapchainInfo().height,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .format = VK_FORMAT_R16G16_SFLOAT,
+        .families = imageFamily,
+        .mutableFormat = false,
+    };
+
+    m_outputImages = Renderer::Get().m_swapchainImages;
     for (int i = 0; i < maxFramesInFlight; i++)
     {
-        m_outputImages[i] = &Renderer::Get().m_swapchainImages[i];
+        m_diffuseBuffers[i] = Image(diffuseColorBufferState);
+        m_normalBuffers[i] = Image(normalBufferState);
+
         auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_SRGB, m_outputImages[i]},
-            {VK_FORMAT_D32_SFLOAT, m_depthImages[i]},
+            {VK_FORMAT_B8G8R8A8_UNORM, &m_diffuseBuffers[i]},
+            {VK_FORMAT_R16G16_SFLOAT, &m_normalBuffers[i]},
+            {VK_FORMAT_D32_SFLOAT, &m_depthImages[i]},
         });
 
         Framebuffer::State framebufferState = {
@@ -50,9 +74,11 @@ void MainRenderPass::createFrameBuffers(VkRenderPass renderPass)
         };
         m_framebuffers[i] = Framebuffer(framebufferState);
     }
+
+    updateGBuffer();
 }
 
-MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
+DeferredRenderPass::DeferredRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
     : m_cameraRef(camera)
 {
     Renderer &renderer = Renderer::Get();
@@ -70,28 +96,39 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserCon
     descriptorSetLayouts[DSL_FREQ_PER_MAT] = VkInit::CreateVkDescriptorSetLayout(perMaterialDescriptorSetDesc);
     descriptorSetLayouts[DSL_FREQ_PER_MESH] = VkInit::CreateEmptyVkDescriptorSetLayout();
 
-    VkInit::RenderPassState::Attachment color = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+    VkInit::RenderPassState::Attachment normals = {
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .format = VK_FORMAT_R16G16_SFLOAT,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
+
+    VkInit::RenderPassState::Attachment diffuseColor = {
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .attachment = 1,
+        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
     VkInit::RenderPassState::Attachment depth = {
         .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .format = VK_FORMAT_D32_SFLOAT,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 1,
+        .attachment = 2,
         .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
+    auto colorAttachments = std::to_array({diffuseColor, normals});
 
     VkInit::RenderPassState renderPassState = {
-        .colorAttachments = std::span(&color, 1),
+        .colorAttachments = colorAttachments,
         .depthAttachment = &depth,
     };
     VkRenderPass renderPass = VkInit::CreateVkRenderPass(renderPassState);
@@ -134,12 +171,17 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserCon
     VkPushConstantRange range;
     range.offset = 0;
     range.size = sizeof(PushConstants);
-    range.stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
     colorBlendAttachmentState.blendEnable = VK_FALSE;
     colorBlendAttachmentState.colorWriteMask
         = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    auto colorBlendStates = std::to_array({
+        colorBlendAttachmentState,
+        colorBlendAttachmentState,
+    });
 
     GraphicsPipeline::State pipelineState = {
         .shaders = shaders,
@@ -148,13 +190,23 @@ MainRenderPass::MainRenderPass(const std::span<Shader *> &shaders, const UserCon
         .pushConstantRanges = std::span(&range, 1),
         .vertexBindingDescription = vertexBindingDescriptions,
         .vertexAttributeDescription = vertexAttributeDescriptions,
-        .colorBlendAttachmentState = colorBlendAttachmentState,
+        .colorBlendAttachmentStates = colorBlendStates,
         .sampleCount = renderer.m_numSamples,
     };
     m_pipeline = std::move(GraphicsPipeline(pipelineState));
 }
 
-void MainRenderPass::resize(uint32_t width, uint32_t height)
+void DeferredRenderPass::updateGBuffer()
+{
+    Renderer &renderer = Renderer::Get();
+    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+
+    m_gBuffer.m_diffuseBuffers = std::span(m_diffuseBuffers.data(), m_diffuseBuffers.size());
+    m_gBuffer.m_normalBuffers = std::span(m_normalBuffers.data(), m_normalBuffers.size());
+    m_gBuffer.m_depthImages = std::span(m_depthImages.data(), m_depthImages.size());
+}
+
+void DeferredRenderPass::resize(uint32_t width, uint32_t height)
 {
     for (uint32_t i = 0; i < m_framebuffers.size(); i++)
     {
@@ -163,7 +215,7 @@ void MainRenderPass::resize(uint32_t width, uint32_t height)
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
-void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
+void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 {
     static uint32_t frameCount = 0;
     Renderer &renderer = Renderer::Get();
@@ -181,7 +233,7 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_outputImages[0]->m_width, m_outputImages[0]->m_height};
+    renderArea.extent = {m_outputImages[0].m_width, m_outputImages[0].m_height};
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
@@ -213,7 +265,7 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
     VkSubpassContents subpassContents = {};
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, subpassContents);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.m_pipeline);
-    vkCmdPushConstants(commandBuffer, m_pipeline.m_pipelineLayout, VK_SHADER_STAGE_GEOMETRY_BIT, 0, sizeof(PushConstants), &pushConstants);
+    vkCmdPushConstants(commandBuffer, m_pipeline.m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
     for (Mesh *mesh : m_meshes)
     {
@@ -223,7 +275,7 @@ void MainRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
     vkCmdEndRenderPass(commandBuffer);
 }
 
-MainRenderPass::~MainRenderPass()
+DeferredRenderPass::~DeferredRenderPass()
 {
     for (uint32_t i = 0; i < m_outputImages.size(); i++)
     {
@@ -256,8 +308,9 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
     {
         m_multisampledImages.push_back(&Renderer::Get().m_swapchainImages[i]);
         m_depthImages.push_back(depthBufState);
+        m_multisampledImages[i]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
         auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_SRGB, m_multisampledImages[i]},
+            {VK_FORMAT_B8G8R8A8_UNORM, m_multisampledImages[i]},
             {VK_FORMAT_D32_SFLOAT, &m_depthImages[i]},
         });
 
@@ -282,7 +335,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const Use
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .format = Renderer::Get().m_windowInfo.preferredSurfaceFormat.format,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .attachment = 0,
         .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -330,7 +383,7 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const Use
         .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
         .vertexBindingDescription = std::span<VkVertexInputBindingDescription>(),
         .vertexAttributeDescription = std::span<VkVertexInputAttributeDescription>(),
-        .colorBlendAttachmentState = colorBlendAttachmentState,
+        .colorBlendAttachmentStates = std::span(&colorBlendAttachmentState, 1),
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
     };
     m_pipeline = std::move(GraphicsPipeline(pipelineState));
@@ -411,23 +464,21 @@ void EditorRenderPass::resize(uint32_t width, uint32_t height)
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
-void MainRenderPass::declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages)
+void DeferredRenderPass::declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages)
 {
     auto dependencyExecutor = [&](VkCommandBuffer, uint32_t) -> void
     {
         Renderer &renderer = Renderer::Get();
         bool frameBuffersDirty = false;
 
-        m_depthImages.resize(renderer.getMaxNumFramesInFlight());
-
         for (uint32_t i = 0; i < Renderer::Get().getMaxNumFramesInFlight(); i++)
         {
-            if (m_depthImages[i] != &depthImages[i])
+            if (&m_depthImages[i] != &depthImages[i])
             {
                 frameBuffersDirty = true;
-                m_depthImages[i] = &depthImages[i];
             }
         }
+        m_depthImages = std::span(depthImages.data(), depthImages.size());
 
         if (frameBuffersDirty)
         {
@@ -437,6 +488,240 @@ void MainRenderPass::declareImageDependency(std::vector<Image *> &colorImages, s
             }
             createFrameBuffers(m_pipeline.m_renderPass);
         }
+    };
+    m_dependencies.push_back(dependencyExecutor);
+}
+
+void ShadingRenderPass::updateDescriptorSet(VkCommandBuffer buffer, uint32_t frameIdx)
+{
+    Renderer &renderer = Renderer::Get();
+    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+
+    VkImageMemoryBarrier imageBarrier = {};
+    imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Previous layout
+    imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;   // New layout
+    imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Image aspect mask
+    imageBarrier.subresourceRange.baseMipLevel = 0;                       // Base mip level
+    imageBarrier.subresourceRange.levelCount = 1;                         // Number of mip levels
+    imageBarrier.subresourceRange.baseArrayLayer = 0;                     // Base array layer
+    imageBarrier.subresourceRange.layerCount = 1;                         // Number of layers
+
+    Renderer::DescriptorUpdateState descriptorUpdateState = {
+        .descriptorSet = m_lightingDescriptorSets[frameIdx][DSL_FREQ_PER_PASS],
+        .imageView = VK_NULL_HANDLE,
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageSampler = VK_NULL_HANDLE,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+    };
+
+    imageBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    imageBarrier.image = m_gBuffer->m_diffuseBuffers[frameIdx].m_image;
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                         &imageBarrier);
+    descriptorUpdateState.imageView = m_gBuffer->m_diffuseBuffers[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.binding = 0;
+    renderer.updateDescriptor(descriptorUpdateState);
+
+    imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    imageBarrier.image = m_gBuffer->m_normalBuffers[frameIdx].m_image;
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                         &imageBarrier);
+    descriptorUpdateState.imageView = m_gBuffer->m_normalBuffers[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.binding = 1;
+    renderer.updateDescriptor(descriptorUpdateState);
+
+    imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    imageBarrier.image = Renderer::Get().m_swapchainImages[frameIdx].m_image;
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0,
+                         nullptr, 1, &imageBarrier);
+    descriptorUpdateState.imageView = Renderer::Get().m_swapchainImages[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.binding = 2;
+    renderer.updateDescriptor(descriptorUpdateState);
+}
+
+void ShadingRenderPass::createImages()
+{
+    Renderer &renderer = Renderer::Get();
+
+    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    m_lightingDescriptorSets.resize(maxFramesInFlight);
+    auto queueFamilies = std::to_array<QueueFamily>({QueueFamily::Graphics});
+
+    Image::State outputImageState = {
+        .width = renderer.m_swapchainImages[0].m_width,
+        .height = renderer.m_swapchainImages[0].m_height,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .families = queueFamilies,
+    };
+
+    for (uint32_t i = 0; i < maxFramesInFlight; i++)
+    {
+        m_outputImages[i] = Image(outputImageState);
+    }
+}
+
+void ShadingRenderPass::createDescriptorSets()
+{
+    Renderer &renderer = Renderer::Get();
+
+    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    for (uint32_t i = 0; i < maxFramesInFlight; i++)
+    {
+        m_lightingDescriptorSets[i][DSL_FREQ_PER_PASS] = renderer.allocateDescriptorSet(m_lightingDescriptorSetLayouts[DSL_FREQ_PER_PASS]);
+    }
+}
+
+ShadingRenderPass::ShadingRenderPass(const Shader &lightCullShader, const Shader &lightingShader, const UserControlledCamera &camera)
+    : m_cameraRef(camera)
+{
+    uint32_t binding;
+    VkDescriptorType descriptorType;
+    uint32_t descriptorCount;
+    VkShaderStageFlags stageFlags;
+    const VkSampler *pImmutableSamplers;
+    auto lightingDescriptorSetBindings = std::to_array<VkDescriptorSetLayoutBinding>({
+        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1),
+        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2),
+    });
+
+    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_FRAME] = VkInit::CreateEmptyVkDescriptorSetLayout();
+    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_PASS] = VkInit::CreateVkDescriptorSetLayout(lightingDescriptorSetBindings);
+    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_MAT] = VkInit::CreateEmptyVkDescriptorSetLayout();
+    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_MESH] = VkInit::CreateEmptyVkDescriptorSetLayout();
+
+    VkPushConstantRange range;
+    range.offset = 0;
+    range.size = sizeof(PushConstants);
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    // m_lightCullPipelineLayout = VkInit::CreateVkPipelineLayout(m_descriptorSetLayouts, std::span(&range, 1));
+    m_shadingPipelineLayout = VkInit::CreateVkPipelineLayout(m_lightingDescriptorSetLayouts, std::span(&range, 1));
+
+    ComputePipeline::State lightCullPipelineState = {.layout = m_lightCullPipelineLayout, .shader = lightCullShader};
+    ComputePipeline::State shadingPipelineState = {.layout = m_shadingPipelineLayout, .shader = lightingShader};
+
+    // m_lightCullPipeline = ComputePipeline(lightCullPipelineState);
+    m_shadingPipeline = ComputePipeline(shadingPipelineState);
+
+    // createImages();
+    createDescriptorSets();
+}
+
+ShadingRenderPass::~ShadingRenderPass()
+{
+    Renderer &renderer = Renderer::Get();
+
+    // m_lightCullPipeline.freeResources();
+    m_shadingPipeline.freeResources();
+
+    // vkDestroyPipelineLayout(renderer.m_deviceInfo.device, m_lightCullPipelineLayout, nullptr);
+    // vkDestroyPipelineLayout(renderer.m_deviceInfo.device, m_shadingPipelineLayout, nullptr);
+}
+
+void ShadingRenderPass::resize(uint32_t width, uint32_t height)
+{
+    uint32_t maxFramesInFlight = Renderer::Get().getMaxNumFramesInFlight();
+    // for (uint32_t i = 0; i < maxFramesInFlight; i++)
+    // {
+    //     m_outputImages[i].freeResources();
+    // }
+    // createImages();
+}
+
+void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
+{
+    glm::u32vec3 blockDim = {32, 32, 1};
+    assert(m_gBuffer && "GBuffer must be set");
+
+    uint32_t gBufWidth = m_gBuffer->m_diffuseBuffers[frameIdx].m_width;
+    uint32_t gBufHeight = m_gBuffer->m_diffuseBuffers[frameIdx].m_height;
+
+    PushConstants pushConstants = {
+        .M = glm::mat4(),
+        .V = m_cameraRef.m_view,
+        .P = m_cameraRef.m_projection,
+    };
+
+    VkImageSubresourceLayers subresourceLayers = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel = 0,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+    };
+    VkImageSubresourceRange subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+    };
+
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_shadingPipeline.m_pipeline);
+    updateDescriptorSet(buffer, frameIdx);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_shadingPipeline.m_pipelineLayout, DSL_FREQ_PER_PASS, 1,
+                            &m_lightingDescriptorSets[frameIdx][DSL_FREQ_PER_PASS], 0, nullptr);
+    VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    // vkCmdClearColorImage(buffer, m_outputImages[frameIdx].m_image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &subresourceRange);
+    vkCmdDispatch(buffer, (gBufWidth + blockDim.x - 1) / blockDim.x, (gBufHeight + blockDim.y - 1) / blockDim.y, 1);
+
+    VkMemoryBarrier renderPassMemoryBarrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+    };
+
+    VkOffset3D startOffset = {0, 0, 0};
+    VkOffset3D endOffset
+        = {(int32_t)m_gBuffer->m_diffuseBuffers[frameIdx].m_width, (int32_t)m_gBuffer->m_diffuseBuffers[frameIdx].m_height, 1};
+    VkImageBlit imageBlit = {
+        .srcSubresource = subresourceLayers,
+        .srcOffsets = {
+            startOffset,
+            endOffset,
+        },
+        .dstSubresource = subresourceLayers,
+        .dstOffsets = {
+            startOffset,
+            endOffset,
+        },
+    };
+
+    VkImageMemoryBarrier imageBarrierSwapchain = {};
+    imageBarrierSwapchain.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageBarrierSwapchain.srcAccessMask = 0;
+    imageBarrierSwapchain.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    imageBarrierSwapchain.oldLayout = VK_IMAGE_LAYOUT_GENERAL;         // Previous layout
+    imageBarrierSwapchain.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // New layout
+    imageBarrierSwapchain.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrierSwapchain.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrierSwapchain.image = Renderer::Get().m_swapchainImages[frameIdx].m_image; // The image to transition
+    imageBarrierSwapchain.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;     // Image aspect mask
+    imageBarrierSwapchain.subresourceRange.baseMipLevel = 0;                           // Base mip level
+    imageBarrierSwapchain.subresourceRange.levelCount = 1;                             // Number of mip levels
+    imageBarrierSwapchain.subresourceRange.baseArrayLayer = 0;                         // Base array layer
+    imageBarrierSwapchain.subresourceRange.layerCount = 1;                             // Number of layers
+
+    auto imageMemoryBarriers = std::to_array<VkImageMemoryBarrier>({imageBarrierSwapchain});
+
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+                         imageMemoryBarriers.size(), imageMemoryBarriers.data());
+
+    // vkCmdBlitImage(buffer, m_outputImages[frameIdx].m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    //                Renderer::Get().m_swapchainImages[frameIdx].m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit,
+    //                VK_FILTER_NEAREST);
+}
+
+void ShadingRenderPass::declareGBufferDependency(const GBuffer &gBuffer)
+{
+    auto dependencyExecutor = [&](VkCommandBuffer, uint32_t) -> void
+    {
+        m_gBuffer = &gBuffer;
     };
     m_dependencies.push_back(dependencyExecutor);
 }

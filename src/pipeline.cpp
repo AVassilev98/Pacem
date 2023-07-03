@@ -38,8 +38,8 @@ GraphicsPipeline::GraphicsPipeline(const State &state)
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .logicOpEnable = VK_FALSE,
         .logicOp = VK_LOGIC_OP_COPY,
-        .attachmentCount = 1,
-        .pAttachments = &state.colorBlendAttachmentState,
+        .attachmentCount = static_cast<uint32_t>(state.colorBlendAttachmentStates.size()),
+        .pAttachments = state.colorBlendAttachmentStates.data(),
     };
 
     VkPipelineMultisampleStateCreateInfo msaaStateInfo = {
@@ -99,4 +99,22 @@ void GraphicsPipeline::freeResources()
     {
         vkDestroyDescriptorSetLayout(renderer.m_deviceInfo.device, descriptorSetLayout, nullptr);
     }
+}
+
+ComputePipeline::ComputePipeline(const State &state)
+    : m_pipelineLayout(state.layout)
+{
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = VkInit::CreateVkPipelineShaderStageCreateInfo(state.shader);
+
+    VkInit::ComputePipelineState computePipelineState = {
+        .shader = shaderStageCreateInfo,
+        .layout = state.layout,
+    };
+    m_pipeline = VkInit::CreateVkComputePipeline(computePipelineState);
+}
+
+void ComputePipeline::freeResources()
+{
+    Renderer &renderer = Renderer::Get();
+    vkDestroyPipeline(renderer.m_deviceInfo.device, m_pipeline, nullptr);
 }

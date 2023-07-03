@@ -41,16 +41,19 @@ int main()
     Shader lineFragShader(CONCAT(SHADER_PATH, "editorGrid.frag.spv"), Shader::Stage::Fragment);
 
     Shader vertShader(CONCAT(SHADER_PATH, "mainPass.vert.spv"), Shader::Stage::Vertex);
-    Shader geoShader(CONCAT(SHADER_PATH, "mainPass.geom.spv"), Shader::Stage::Geometry);
     Shader fragShader(CONCAT(SHADER_PATH, "mainPass.frag.spv"), Shader::Stage::Fragment);
 
+    Shader lightCullShader(CONCAT(SHADER_PATH, "lightCull.comp.spv"), Shader::Stage::Compute);
+    Shader lightShadeShader(CONCAT(SHADER_PATH, "lightShade.comp.spv"), Shader::Stage::Compute);
+
     auto lineShaders = std::to_array({&lineVertShader, &lineFragShader});
-    auto mainShaders = std::to_array({&vertShader, &geoShader, &fragShader});
+    auto mainShaders = std::to_array({&vertShader, &fragShader});
 
     UserControlledCamera mainCamera;
 
     EditorRenderPass editorRenderPass(lineShaders, mainCamera);
-    MainRenderPass mainRenderPass(mainShaders, mainCamera);
+    DeferredRenderPass mainRenderPass(mainShaders, mainCamera);
+    ShadingRenderPass shadingRenderPass(lightCullShader, lightShadeShader, mainCamera);
     Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
     mainRenderPass.addMesh(&suzanneMesh);
 
@@ -58,6 +61,9 @@ int main()
 
     renderer.addRenderPass(&mainRenderPass);
     mainRenderPass.declareImageDependency(editorRenderPass.m_multisampledImages, editorRenderPass.m_depthImages);
+
+    renderer.addRenderPass(&shadingRenderPass);
+    shadingRenderPass.declareGBufferDependency(mainRenderPass.m_gBuffer);
 
     renderer.addRenderPass(&gui);
 

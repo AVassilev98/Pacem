@@ -331,7 +331,7 @@ SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HA
     glm::clamp((uint32_t)height, m_windowInfo.surfaceCapabilities.minImageExtent.height,
                m_windowInfo.surfaceCapabilities.maxImageExtent.height);
 
-    constexpr auto swapchainFormats = std::to_array({VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM});
+    constexpr auto swapchainFormats = std::to_array({WindowInfo::preferredSurfaceFormat.format, VK_FORMAT_B8G8R8A8_UNORM});
     VkImageFormatListCreateInfo formatListCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,
         .viewFormatCount = swapchainFormats.size(),
@@ -346,7 +346,7 @@ SwapchainInfo Renderer::createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HA
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
     swapchainCreateInfo.minImageCount = numPreferredImages > m_windowInfo.surfaceCapabilities.maxImageCount
                                           ? m_windowInfo.surfaceCapabilities.maxImageCount
                                           : numPreferredImages;
@@ -937,14 +937,39 @@ Image Renderer::uploadImageToGpu(VkBuffer src, Image::State &dstState)
     return std::move(dst);
 }
 
-void Renderer::updateDescriptor(VkDescriptorSet descriptorSet, const VkDescriptorImageInfo &descriptorImageInfo, uint32_t binding)
+void Renderer::updateDescriptor(const DescriptorUpdateState &descriptorUpdateState)
 {
+    VkDescriptorImageInfo descriptorImageInfo = {
+        .sampler = descriptorUpdateState.imageSampler,
+        .imageView = descriptorUpdateState.imageView,
+        .imageLayout = descriptorUpdateState.imageLayout,
+    };
+
     VkWriteDescriptorSet writeDiffuseDescriptorSet = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    writeDiffuseDescriptorSet.dstSet = descriptorSet;
-    writeDiffuseDescriptorSet.dstBinding = binding;
-    writeDiffuseDescriptorSet.dstArrayElement = 0;
+    writeDiffuseDescriptorSet.dstSet = descriptorUpdateState.descriptorSet;
+    writeDiffuseDescriptorSet.dstBinding = descriptorUpdateState.binding;
+    writeDiffuseDescriptorSet.dstArrayElement = descriptorUpdateState.dstArrayElement;
     writeDiffuseDescriptorSet.descriptorCount = 1;
-    writeDiffuseDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writeDiffuseDescriptorSet.descriptorType = descriptorUpdateState.descriptorType;
+    writeDiffuseDescriptorSet.pImageInfo = &descriptorImageInfo;
+
+    vkUpdateDescriptorSets(m_deviceInfo.device, 1, &writeDiffuseDescriptorSet, 0, nullptr);
+}
+
+void Renderer::writeDescriptor(const DescriptorWriteState &descriptorUpdateState)
+{
+    VkDescriptorImageInfo descriptorImageInfo = {
+        .sampler = descriptorUpdateState.imageSampler,
+        .imageView = descriptorUpdateState.imageView,
+        .imageLayout = descriptorUpdateState.imageLayout,
+    };
+
+    VkWriteDescriptorSet writeDiffuseDescriptorSet = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    writeDiffuseDescriptorSet.dstSet = descriptorUpdateState.descriptorSet;
+    writeDiffuseDescriptorSet.dstBinding = descriptorUpdateState.binding;
+    writeDiffuseDescriptorSet.dstArrayElement = descriptorUpdateState.dstArrayElement;
+    writeDiffuseDescriptorSet.descriptorCount = 1;
+    writeDiffuseDescriptorSet.descriptorType = descriptorUpdateState.descriptorType;
     writeDiffuseDescriptorSet.pImageInfo = &descriptorImageInfo;
 
     vkUpdateDescriptorSets(m_deviceInfo.device, 1, &writeDiffuseDescriptorSet, 0, nullptr);

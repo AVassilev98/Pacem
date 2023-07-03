@@ -115,6 +115,24 @@ VkPipeline VkInit::CreateVkGraphicsPipeline(const GraphicsPipelineState &state)
     return pipeline;
 }
 
+VkPipeline VkInit::CreateVkComputePipeline(const ComputePipelineState &state)
+{
+    Renderer &renderer = Renderer::Get();
+
+    VkComputePipelineCreateInfo computePipelineCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .flags = 0,
+        .stage = state.shader,
+        .layout = state.layout,
+        .basePipelineHandle = 0,
+        .basePipelineIndex = 0,
+    };
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VK_LOG_ERR(vkCreateComputePipelines(renderer.m_deviceInfo.device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &pipeline));
+    return pipeline;
+}
+
 VkRenderPass VkInit::CreateVkRenderPass(const RenderPassState &state)
 {
     Renderer &renderer = Renderer::Get();

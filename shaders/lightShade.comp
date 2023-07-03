@@ -1,0 +1,40 @@
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(set = 1, binding = 0, rgba8) uniform image2D sourceDiffuse;
+layout(set = 1, binding = 1, rg16f) uniform image2D sourceNormal;
+layout(set = 1, binding = 2, rgba8) uniform image2D destImage;
+
+const vec3 lightPos = vec3(1.0f, -4.0f, 0.0f);
+
+void main()
+{
+    uvec2 imagePos = gl_GlobalInvocationID.xy;
+    vec4 color = imageLoad(sourceDiffuse, ivec2(imagePos));
+
+    if (vec3(color) == vec3(0, 0, 0))
+    {
+        return;
+    }
+
+    // vec3 norm = vec3(normalize(texture(normalMap, vertTexCoord)));
+
+    // vec3 distToLight = normalize(vertPosition - lightPos);
+    // vec3 lightDir = normalize(distToLight);
+    // float distanceFactor = 0.2f / dot(distToLight, distToLight);
+    // float diffuseComponent = max(0.0f, dot(norm, lightDir));
+
+    // vec3 reflectedLightDir = reflect(lightDir, norm);
+    // float specularFactor = pow(max(0.0f, dot(reflectedLightDir, vec3(0.0f, 0.0f, -1.0f))), 7);
+    // float ambientComponent = 0.0f;
+
+    // float total = (ambientComponent + diffuseComponent + specularFactor) * distanceFactor;
+
+    // vec3 texColor = texture(diffuseTexture, vertTexCoord).xyz * total;
+    // vec3 occludedColor = texColor * texture(aoTexture, vertTexCoord).xyz;
+    // vec3 emissiveColor = occludedColor + texture(emissiveTexture, vertTexCoord).xyz;
+
+    // outFragColor = vec4(emissiveColor, 1.0);
+    imageStore(destImage, ivec2(imagePos), color);
+}

@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "mesh.h"
 #include "pipeline.h"
+#include "renderer.h"
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -44,7 +45,14 @@ class EditorRenderPass : public RenderPass
     void createFrameBuffers(VkRenderPass renderPass);
 };
 
-class MainRenderPass : public RenderPass
+struct GBuffer
+{
+    std::span<Image> m_diffuseBuffers;
+    std::span<Image> m_normalBuffers;
+    std::span<Image> m_depthImages;
+};
+
+class DeferredRenderPass : public RenderPass
 {
   public:
     virtual void resize(uint32_t width, uint32_t height) override;
@@ -52,13 +60,52 @@ class MainRenderPass : public RenderPass
     void declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages);
 
   public:
-    MainRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
-    ~MainRenderPass();
+    DeferredRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
+    ~DeferredRenderPass();
     GraphicsPipeline m_pipeline;
+    GBuffer m_gBuffer;
 
   private:
     void createFrameBuffers(VkRenderPass renderPass);
-    std::vector<Image *> m_outputImages;
-    std::vector<Image *> m_depthImages;
+    void updateGBuffer();
+
+    std::vector<Image> m_diffuseBuffers;
+    std::vector<Image> m_normalBuffers;
+
+    std::span<Image> m_outputImages;
+    std::span<Image> m_depthImages;
+    const UserControlledCamera &m_cameraRef;
+};
+
+class ShadingRenderPass : public RenderPass
+{
+  public:
+    virtual void resize(uint32_t width, uint32_t height) override;
+    virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
+    void declareGBufferDependency(const GBuffer &gBuffer);
+
+  public:
+    ShadingRenderPass(const Shader &lightCullShader, const Shader &lightingShader, const UserControlledCamera &camera);
+    ~ShadingRenderPass();
+
+  private:
+    void createDescriptorSets();
+    void createImages();
+    void updateDescriptorSet(VkCommandBuffer commandBuffer, uint32_t frameIdx);
+
+  private:
+    const GBuffer *m_gBuffer = nullptr;
+    std::vector<Image> m_outputImages = std::vector<Image>(Renderer::Get().getMaxNumFramesInFlight());
+
+    std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> m_lightingDescriptorSetLayouts;
+    std::vector<std::array<VkDescriptorSet, DSL_FREQ_COUNT>> m_lightingDescriptorSets
+        = std::vector<std::array<VkDescriptorSet, DSL_FREQ_COUNT>>(Renderer::Get().getMaxNumFramesInFlight());
+
+    ComputePipeline m_lightCullPipeline;
+    ComputePipeline m_shadingPipeline;
+
+    VkPipelineLayout m_lightCullPipelineLayout;
+    VkPipelineLayout m_shadingPipelineLayout;
+
     const UserControlledCamera &m_cameraRef;
 };
