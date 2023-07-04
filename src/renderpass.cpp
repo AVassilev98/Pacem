@@ -56,7 +56,7 @@ void DeferredRenderPass::createFrameBuffers(VkRenderPass renderPass)
         .mutableFormat = false,
     };
 
-    m_outputImages = Renderer::Get().m_swapchainImages;
+    m_outputImages = Renderer::Get().getSwapchainImages();
     for (int i = 0; i < maxFramesInFlight; i++)
     {
         m_diffuseBuffers[i] = Image(diffuseColorBufferState);
@@ -191,7 +191,7 @@ DeferredRenderPass::DeferredRenderPass(const std::span<Shader *> &shaders, const
         .vertexBindingDescription = vertexBindingDescriptions,
         .vertexAttributeDescription = vertexAttributeDescriptions,
         .colorBlendAttachmentStates = colorBlendStates,
-        .sampleCount = renderer.m_numSamples,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
     };
     m_pipeline = std::move(GraphicsPipeline(pipelineState));
 }
@@ -300,13 +300,13 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         .format = VK_FORMAT_D32_SFLOAT,
         .families = {&imageFamily, 1},
-        .samples = renderer.m_numSamples,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
     };
 
     for (uint32_t i = 0; i < maxFramesInFlight; i++)
     {
-        m_multisampledImages.push_back(&Renderer::Get().m_swapchainImages[i]);
+        m_multisampledImages.push_back(&Renderer::Get().getSwapchainImages()[i]);
         m_depthImages.push_back(depthBufState);
         m_multisampledImages[i]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
         auto attachments = std::to_array<ImageRef>({
@@ -535,10 +535,10 @@ void ShadingRenderPass::updateDescriptorSet(VkCommandBuffer buffer, uint32_t fra
     renderer.updateDescriptor(descriptorUpdateState);
 
     imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    imageBarrier.image = Renderer::Get().m_swapchainImages[frameIdx].m_image;
+    imageBarrier.image = Renderer::Get().getSwapchainImages()[frameIdx].m_image;
     vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0,
                          nullptr, 1, &imageBarrier);
-    descriptorUpdateState.imageView = Renderer::Get().m_swapchainImages[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.imageView = Renderer::Get().getSwapchainImages()[frameIdx].getImageViewByFormat();
     descriptorUpdateState.binding = 2;
     renderer.updateDescriptor(descriptorUpdateState);
 }
@@ -552,8 +552,8 @@ void ShadingRenderPass::createImages()
     auto queueFamilies = std::to_array<QueueFamily>({QueueFamily::Graphics});
 
     Image::State outputImageState = {
-        .width = renderer.m_swapchainImages[0].m_width,
-        .height = renderer.m_swapchainImages[0].m_height,
+        .width = renderer.getSwapchainImages()[0].m_width,
+        .height = renderer.getSwapchainImages()[0].m_height,
         .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .families = queueFamilies,
@@ -700,21 +700,17 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
     imageBarrierSwapchain.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // New layout
     imageBarrierSwapchain.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     imageBarrierSwapchain.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageBarrierSwapchain.image = Renderer::Get().m_swapchainImages[frameIdx].m_image; // The image to transition
-    imageBarrierSwapchain.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;     // Image aspect mask
-    imageBarrierSwapchain.subresourceRange.baseMipLevel = 0;                           // Base mip level
-    imageBarrierSwapchain.subresourceRange.levelCount = 1;                             // Number of mip levels
-    imageBarrierSwapchain.subresourceRange.baseArrayLayer = 0;                         // Base array layer
-    imageBarrierSwapchain.subresourceRange.layerCount = 1;                             // Number of layers
+    imageBarrierSwapchain.image = Renderer::Get().getSwapchainImages()[frameIdx].m_image; // The image to transition
+    imageBarrierSwapchain.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;        // Image aspect mask
+    imageBarrierSwapchain.subresourceRange.baseMipLevel = 0;                              // Base mip level
+    imageBarrierSwapchain.subresourceRange.levelCount = 1;                                // Number of mip levels
+    imageBarrierSwapchain.subresourceRange.baseArrayLayer = 0;                            // Base array layer
+    imageBarrierSwapchain.subresourceRange.layerCount = 1;                                // Number of layers
 
     auto imageMemoryBarriers = std::to_array<VkImageMemoryBarrier>({imageBarrierSwapchain});
 
     vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
                          imageMemoryBarriers.size(), imageMemoryBarriers.data());
-
-    // vkCmdBlitImage(buffer, m_outputImages[frameIdx].m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    //                Renderer::Get().m_swapchainImages[frameIdx].m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit,
-    //                VK_FILTER_NEAREST);
 }
 
 void ShadingRenderPass::declareGBufferDependency(const GBuffer &gBuffer)

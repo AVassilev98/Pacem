@@ -16,6 +16,7 @@ BreakConstructorInitializers: BeforeComma
 AllowAllParametersOfDeclarationOnNextLine: false
 PointerAlignment: Right
 AlignTrailingComments: true
+AlwaysBreakTemplateDeclarations: true
 BraceWrapping:
   AfterCaseLabel: true
   AfterClass: false

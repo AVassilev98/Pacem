@@ -1,3 +1,5 @@
+#include "backends/imgui_impl_glfw.h"
+#include "imgui.h"
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -20,6 +22,71 @@
 {
     static Renderer device;
     return device;
+}
+
+[[nodiscard]] VkDevice Renderer::getDevice()
+{
+    return m_deviceInfo.device;
+}
+
+[[nodiscard]] VmaAllocator Renderer::getAllocator()
+{
+    return m_vmaAllocator;
+}
+
+[[nodiscard]] std::span<Image> Renderer::getSwapchainImages()
+{
+    return m_swapchainImages;
+}
+
+[[nodiscard]] VkDescriptorPool Renderer::getDescriptorPool()
+{
+    return m_descriptorPools.back();
+}
+
+void Renderer::initImGuiGlfwVulkan(VkRenderPass renderPass)
+{
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForVulkan(m_windowInfo.window, true);
+    auto poolSizes = std::to_array<VkDescriptorPoolSize>({
+        {VK_DESCRIPTOR_TYPE_SAMPLER, 500},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4000},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 500},
+    });
+
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    descriptorPoolCreateInfo.maxSets = 1000;
+    descriptorPoolCreateInfo.poolSizeCount = poolSizes.size();
+    descriptorPoolCreateInfo.pPoolSizes = poolSizes.data();
+    descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    VK_LOG_ERR(vkCreateDescriptorPool(getDevice(), &descriptorPoolCreateInfo, nullptr, &m_imguiDescriptorPool));
+
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = m_instance;
+    init_info.PhysicalDevice = m_physDeviceInfo.device;
+    init_info.Device = getDevice();
+    init_info.Queue = m_transferQueue.graphicsQueue;
+    init_info.DescriptorPool = m_imguiDescriptorPool;
+    init_info.MinImageCount = getMaxNumFramesInFlight();
+    init_info.ImageCount = getMaxNumFramesInFlight();
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    ImGui_ImplVulkan_Init(&init_info, renderPass);
+
+    graphicsImmediate(
+        [&](VkCommandBuffer cmd)
+        {
+            ImGui_ImplVulkan_CreateFontsTexture(cmd);
+        });
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
 static VkBool32 message(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -503,7 +570,7 @@ void Renderer::destroyDescriptorPools()
     }
 }
 
-std::vector<Image> Renderer::getSwapchainImages()
+std::vector<Image> Renderer::getSwapchainImagesFromWindow()
 {
     std::vector<Image> images(getMaxNumFramesInFlight());
     std::vector<VkImage> vkImages(getMaxNumFramesInFlight());
@@ -997,7 +1064,7 @@ void Renderer::handleResize()
     VkSwapchainKHR oldSwapchain = m_swapchainInfo.swapchain;
     m_swapchainInfo = createSwapchain(oldSwapchain);
     vkDestroySwapchainKHR(m_deviceInfo.device, oldSwapchain, nullptr);
-    m_swapchainImages = getSwapchainImages();
+    m_swapchainImages = getSwapchainImagesFromWindow();
     for (RenderPass *renderPass : m_renderPasses)
     {
         renderPass->resize(m_swapchainInfo.width, m_swapchainInfo.height);
@@ -1016,7 +1083,7 @@ Renderer::Renderer()
     , m_vmaAllocator(createVmaAllocator())
     , m_swapchainInfo(createSwapchain())
     , m_descriptorPools({createDescriptorPool()})
-    , m_swapchainImages(getSwapchainImages())
+    , m_swapchainImages(getSwapchainImagesFromWindow())
     , m_renderContext(createRenderContext())
     , m_transferQueue(createTransferQueue())
 {
@@ -1078,6 +1145,11 @@ Renderer::~Renderer()
 #ifndef NDEBUG
     destroyDebugMessenger();
 #endif
+    if (m_imguiDescriptorPool)
+    {
+        vkDestroyDescriptorPool(getDevice(), m_imguiDescriptorPool, nullptr);
+    }
+
     destroyTransferQueue();
     destroyRenderContext();
     destroyDescriptorPools();

@@ -19,17 +19,20 @@ namespace
 {
     static Assimp::Importer g_importer;
 
-    template <typename T> [[nodiscard]] inline glm::vec3 toGlmVec3(const T &elem)
+    template <typename T>
+    [[nodiscard]] inline glm::vec3 toGlmVec3(const T &elem)
     {
         return glm::vec3(elem[0], elem[1], elem[2]);
     }
 
-    template <typename T> [[nodiscard]] inline glm::vec2 toGlmVec2(const T &elem)
+    template <typename T>
+    [[nodiscard]] inline glm::vec2 toGlmVec2(const T &elem)
     {
         return glm::vec2(elem[0], -elem[1]);
     }
 
-    template <typename T> [[nodiscard]] inline glm::vec3 toU32GlmVec3(const T &elem)
+    template <typename T>
+    [[nodiscard]] inline glm::vec3 toU32GlmVec3(const T &elem)
     {
         return glm::u32vec3(elem[0], elem[1], elem[2]);
     }
@@ -219,11 +222,10 @@ Mesh::~Mesh()
 {
     Renderer &renderer = Renderer::Get();
 
-    vmaDestroyBuffer(renderer.m_vmaAllocator, vkVertexBuffer.m_buffer, vkVertexBuffer.m_allocation);
-    vmaDestroyBuffer(renderer.m_vmaAllocator, vkIndexBuffer.m_buffer, vkIndexBuffer.m_allocation);
-    vkFreeDescriptorSets(renderer.m_deviceInfo.device, renderer.m_descriptorPools.back(), matDescriptorSets.size(),
-                         matDescriptorSets.data());
-    vkDestroySampler(renderer.m_deviceInfo.device, sampler, nullptr);
+    vmaDestroyBuffer(renderer.getAllocator(), vkVertexBuffer.m_buffer, vkVertexBuffer.m_allocation);
+    vmaDestroyBuffer(renderer.getAllocator(), vkIndexBuffer.m_buffer, vkIndexBuffer.m_allocation);
+    vkFreeDescriptorSets(renderer.getDevice(), renderer.getDescriptorPool(), matDescriptorSets.size(), matDescriptorSets.data());
+    vkDestroySampler(renderer.getDevice(), sampler, nullptr);
     for (auto &kv : textures)
     {
         kv.second.freeResources();

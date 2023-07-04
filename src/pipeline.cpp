@@ -92,12 +92,12 @@ void GraphicsPipeline::freeResources()
 {
     Renderer &renderer = Renderer::Get();
 
-    vkDestroyPipeline(renderer.m_deviceInfo.device, m_pipeline, nullptr);
-    vkDestroyPipelineLayout(renderer.m_deviceInfo.device, m_pipelineLayout, nullptr);
-    vkDestroyRenderPass(renderer.m_deviceInfo.device, m_renderPass, nullptr);
+    vkDestroyPipeline(renderer.getDevice(), m_pipeline, nullptr);
+    vkDestroyPipelineLayout(renderer.getDevice(), m_pipelineLayout, nullptr);
+    vkDestroyRenderPass(renderer.getDevice(), m_renderPass, nullptr);
     for (VkDescriptorSetLayout descriptorSetLayout : m_descriptorSetLayouts)
     {
-        vkDestroyDescriptorSetLayout(renderer.m_deviceInfo.device, descriptorSetLayout, nullptr);
+        vkDestroyDescriptorSetLayout(renderer.getDevice(), descriptorSetLayout, nullptr);
     }
 }
 
@@ -116,5 +116,5 @@ ComputePipeline::ComputePipeline(const State &state)
 void ComputePipeline::freeResources()
 {
     Renderer &renderer = Renderer::Get();
-    vkDestroyPipeline(renderer.m_deviceInfo.device, m_pipeline, nullptr);
+    vkDestroyPipeline(renderer.getDevice(), m_pipeline, nullptr);
 }

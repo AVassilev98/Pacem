@@ -27,7 +27,7 @@ void Gui::createFrameBuffers(VkRenderPass renderPass)
 
     for (int i = 0; i < maxFramesInFlight; i++)
     {
-        m_swapchainImages.emplace_back(&renderer.m_swapchainImages[i]);
+        m_swapchainImages.emplace_back(&renderer.getSwapchainImages()[i]);
         auto attachments = std::to_array<ImageRef>({
             {VK_FORMAT_B8G8R8A8_UNORM, m_swapchainImages[i]},
         });
@@ -148,40 +148,6 @@ Gui::Gui()
 {
     Renderer &renderer = Renderer::Get();
 
-    auto poolSizes = std::to_array<VkDescriptorPoolSize>({
-        {VK_DESCRIPTOR_TYPE_SAMPLER, 500},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4000},
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2000},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 500},
-    });
-
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    descriptorPoolCreateInfo.maxSets = 1000;
-    descriptorPoolCreateInfo.poolSizeCount = poolSizes.size();
-    descriptorPoolCreateInfo.pPoolSizes = poolSizes.data();
-    descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    VK_LOG_ERR(vkCreateDescriptorPool(renderer.m_deviceInfo.device, &descriptorPoolCreateInfo, nullptr, &m_imguiDescriptorPool));
-
-    ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForVulkan(renderer.m_windowInfo.window, true);
-
-    ImGui_ImplVulkan_InitInfo init_info = {};
-    init_info.Instance = renderer.m_instance;
-    init_info.PhysicalDevice = renderer.m_physDeviceInfo.device;
-    init_info.Device = renderer.m_deviceInfo.device;
-    init_info.Queue = renderer.m_transferQueue.graphicsQueue;
-    init_info.DescriptorPool = m_imguiDescriptorPool;
-    init_info.MinImageCount = renderer.getMaxNumFramesInFlight();
-    init_info.ImageCount = renderer.getMaxNumFramesInFlight();
-    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
     VkInit::RenderPassState::Attachment colorAttachment = {
         .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -200,14 +166,7 @@ Gui::Gui()
 
     m_renderPass = VkInit::CreateVkRenderPass(renderPassState);
     createFrameBuffers(m_renderPass);
-
-    ImGui_ImplVulkan_Init(&init_info, m_renderPass);
-    renderer.graphicsImmediate(
-        [&](VkCommandBuffer cmd)
-        {
-            ImGui_ImplVulkan_CreateFontsTexture(cmd);
-        });
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
+    renderer.initImGuiGlfwVulkan(m_renderPass);
 
     setImGuiStyles();
 }
@@ -219,8 +178,7 @@ Gui::~Gui()
     {
         framebuffer.freeResources();
     }
-    vkDestroyRenderPass(renderer.m_deviceInfo.device, m_renderPass, nullptr);
-    vkDestroyDescriptorPool(renderer.m_deviceInfo.device, m_imguiDescriptorPool, nullptr);
+    vkDestroyRenderPass(renderer.getDevice(), m_renderPass, nullptr);
     ImGui_ImplVulkan_Shutdown();
     ImGui::DestroyContext();
 }

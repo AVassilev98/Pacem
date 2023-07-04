@@ -23,7 +23,7 @@ VkDescriptorSetLayout VkInit::CreateEmptyVkDescriptorSetLayout()
     descriptorSetLayoutInfo.pBindings = nullptr;
 
     VkDescriptorSetLayout descriptorSetLayout;
-    VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.m_deviceInfo.device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
+    VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.getDevice(), &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
     return descriptorSetLayout;
 }
 
@@ -36,7 +36,7 @@ VkDescriptorSetLayout VkInit::CreateVkDescriptorSetLayout(const std::span<VkDesc
     descriptorSetLayoutInfo.pBindings = bindings.data();
 
     VkDescriptorSetLayout descriptorSetLayout;
-    VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.m_deviceInfo.device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
+    VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.getDevice(), &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
     return descriptorSetLayout;
 }
 
@@ -62,7 +62,7 @@ VkPipelineLayout VkInit::CreateVkPipelineLayout(const std::span<VkDescriptorSetL
     pipelineLayoutCreateInfo.pPushConstantRanges = pushRanges.data();
 
     VkPipelineLayout pipelineLayout;
-    VK_LOG_ERR(vkCreatePipelineLayout(renderer.m_deviceInfo.device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+    VK_LOG_ERR(vkCreatePipelineLayout(renderer.getDevice(), &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
     return pipelineLayout;
 }
 
@@ -111,7 +111,7 @@ VkPipeline VkInit::CreateVkGraphicsPipeline(const GraphicsPipelineState &state)
     pipelineCreateInfo.basePipelineHandle = 0;
 
     VkPipeline pipeline = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateGraphicsPipelines(renderer.m_deviceInfo.device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, VK_NULL_HANDLE, &pipeline));
+    VK_LOG_ERR(vkCreateGraphicsPipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, VK_NULL_HANDLE, &pipeline));
     return pipeline;
 }
 
@@ -129,7 +129,7 @@ VkPipeline VkInit::CreateVkComputePipeline(const ComputePipelineState &state)
     };
 
     VkPipeline pipeline = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateComputePipelines(renderer.m_deviceInfo.device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &pipeline));
+    VK_LOG_ERR(vkCreateComputePipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &pipeline));
     return pipeline;
 }
 
@@ -228,7 +228,7 @@ VkRenderPass VkInit::CreateVkRenderPass(const RenderPassState &state)
     renderPassInfo.pDependencies = subpassDependencies.data();
 
     VkRenderPass renderPass = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateRenderPass(renderer.m_deviceInfo.device, &renderPassInfo, nullptr, &renderPass));
+    VK_LOG_ERR(vkCreateRenderPass(renderer.getDevice(), &renderPassInfo, nullptr, &renderPass));
     return renderPass;
 }
 
@@ -256,7 +256,7 @@ VkSampler VkInit::CreateVkSampler(const SamplerState &state)
     };
 
     VkSampler sampler = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateSampler(renderer.m_deviceInfo.device, &samplerCreateInfo, nullptr, &sampler));
+    VK_LOG_ERR(vkCreateSampler(renderer.getDevice(), &samplerCreateInfo, nullptr, &sampler));
     return sampler;
 }
 
@@ -279,7 +279,7 @@ VkBuffer VkInit::CreateVkBuffer(const BufferState &state)
     };
 
     VkBuffer buffer = VK_NULL_HANDLE;
-    VK_LOG_ERR(vmaCreateBuffer(renderer.m_vmaAllocator, &bufferCreateInfo, &vmaAllocationInfo, &buffer, &state.allocation.allocation,
+    VK_LOG_ERR(vmaCreateBuffer(renderer.getAllocator(), &bufferCreateInfo, &vmaAllocationInfo, &buffer, &state.allocation.allocation,
                                &state.allocation.allocationInfo));
     return buffer;
 }
@@ -309,7 +309,7 @@ VkImage VkInit::CreateVkImage(const ImageState &state)
     };
 
     VkImage image = VK_NULL_HANDLE;
-    VK_LOG_ERR(vmaCreateImage(renderer.m_vmaAllocator, &imageCreateInfo, &allocationCreateInfo, &image, &state.allocation.allocation,
+    VK_LOG_ERR(vmaCreateImage(renderer.getAllocator(), &imageCreateInfo, &allocationCreateInfo, &image, &state.allocation.allocation,
                               &state.allocation.allocationInfo));
     return image;
 }
@@ -336,7 +336,7 @@ VkImageView VkInit::CreateVkImageView(const ImageViewState &state)
     };
 
     VkImageView imageView = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateImageView(renderer.m_deviceInfo.device, &imageViewCreateInfo, nullptr, &imageView));
+    VK_LOG_ERR(vkCreateImageView(renderer.getDevice(), &imageViewCreateInfo, nullptr, &imageView));
     return imageView;
 }
 
@@ -355,6 +355,6 @@ VkFramebuffer VkInit::CreateVkFramebuffer(const FramebufferState &state)
     };
 
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateFramebuffer(renderer.m_deviceInfo.device, &framebufferCreateInfo, nullptr, &framebuffer));
+    VK_LOG_ERR(vkCreateFramebuffer(renderer.getDevice(), &framebufferCreateInfo, nullptr, &framebuffer));
     return framebuffer;
 }

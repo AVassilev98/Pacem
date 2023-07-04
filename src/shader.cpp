@@ -58,11 +58,11 @@ Shader::Shader(const std::string &path, Shader::Stage stage)
     shaderModuleCreateInfo.codeSize = fileSize;
     shaderModuleCreateInfo.pCode = buffer.data();
 
-    VK_LOG_ERR(vkCreateShaderModule(renderer.m_deviceInfo.device, &shaderModuleCreateInfo, nullptr, &m_module));
+    VK_LOG_ERR(vkCreateShaderModule(renderer.getDevice(), &shaderModuleCreateInfo, nullptr, &m_module));
 }
 
 Shader::~Shader()
 {
     Renderer &renderer = Renderer::Get();
-    vkDestroyShaderModule(renderer.m_deviceInfo.device, m_module, nullptr);
+    vkDestroyShaderModule(renderer.getDevice(), m_module, nullptr);
 }

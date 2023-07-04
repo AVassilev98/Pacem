@@ -36,7 +36,7 @@ Buffer::Buffer(const State &state)
 void Buffer::freeResources()
 {
     Renderer &renderer = Renderer::Get();
-    vmaDestroyBuffer(renderer.m_vmaAllocator, m_buffer, m_allocation);
+    vmaDestroyBuffer(renderer.getAllocator(), m_buffer, m_allocation);
 }
 
 Image::Image(const State &state)
@@ -124,9 +124,9 @@ void Image::freeResources()
 
     for (uint32_t i = 0; i < m_numImageViews; i++)
     {
-        vkDestroyImageView(renderer.m_deviceInfo.device, m_imageViews[i].second, nullptr);
+        vkDestroyImageView(renderer.getDevice(), m_imageViews[i].second, nullptr);
     }
-    vmaDestroyImage(renderer.m_vmaAllocator, m_image, m_allocation);
+    vmaDestroyImage(renderer.getAllocator(), m_image, m_allocation);
 }
 
 Framebuffer::Framebuffer(const State &state)
@@ -158,5 +158,5 @@ void Framebuffer::freeResources()
 {
     Renderer &renderer = Renderer::Get();
 
-    vkDestroyFramebuffer(renderer.m_deviceInfo.device, m_frameBuffer, nullptr);
+    vkDestroyFramebuffer(renderer.getDevice(), m_frameBuffer, nullptr);
 }
