@@ -264,6 +264,8 @@ void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex
 
 DeferredRenderPass::~DeferredRenderPass()
 {
+    m_diffuseBuffers.destroy();
+    m_normalBuffers.destroy();
     m_framebuffers.destroy();
     m_pipeline.freeResources();
 }
@@ -562,11 +564,8 @@ ShadingRenderPass::ShadingRenderPass(const Shader &lightCullShader, const Shader
     range.size = sizeof(PushConstants);
     range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-    // m_lightCullPipelineLayout = VkInit::CreateVkPipelineLayout(m_descriptorSetLayouts, std::span(&range, 1));
-    m_shadingPipelineLayout = VkInit::CreateVkPipelineLayout(m_lightingDescriptorSetLayouts, std::span(&range, 1));
-
-    ComputePipeline::State lightCullPipelineState = {.layout = m_lightCullPipelineLayout, .shader = lightCullShader};
-    ComputePipeline::State shadingPipelineState = {.layout = m_shadingPipelineLayout, .shader = lightingShader};
+    // ComputePipeline::State lightCullPipelineState = {.layout = m_lightCullPipelineLayout, .shader = lightCullShader};
+    ComputePipeline::State shadingPipelineState = {.layouts = m_lightingDescriptorSetLayouts, .shader = lightingShader};
 
     // m_lightCullPipeline = ComputePipeline(lightCullPipelineState);
     m_shadingPipeline = ComputePipeline(shadingPipelineState);
@@ -588,12 +587,6 @@ ShadingRenderPass::~ShadingRenderPass()
 
 void ShadingRenderPass::resize(uint32_t width, uint32_t height)
 {
-    uint32_t maxFramesInFlight = Renderer::Get().numFramesInFlight();
-    // for (uint32_t i = 0; i < maxFramesInFlight; i++)
-    // {
-    //     m_outputImages[i].freeResources();
-    // }
-    // createImages();
 }
 
 void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)

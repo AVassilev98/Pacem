@@ -102,13 +102,18 @@ void GraphicsPipeline::freeResources()
 }
 
 ComputePipeline::ComputePipeline(const State &state)
-    : m_pipelineLayout(state.layout)
 {
+    for (uint32_t i = 0; i < DSL_FREQ_COUNT; i++)
+    {
+        m_descriptorSetLayouts[i] = state.layouts[i];
+    }
+
     VkPipelineShaderStageCreateInfo shaderStageCreateInfo = VkInit::CreateVkPipelineShaderStageCreateInfo(state.shader);
+    m_pipelineLayout = VkInit::CreateVkPipelineLayout(state.layouts, state.pushConstantRanges);
 
     VkInit::ComputePipelineState computePipelineState = {
         .shader = shaderStageCreateInfo,
-        .layout = state.layout,
+        .layout = m_pipelineLayout,
     };
     m_pipeline = VkInit::CreateVkComputePipeline(computePipelineState);
 }
@@ -117,4 +122,9 @@ void ComputePipeline::freeResources()
 {
     Renderer &renderer = Renderer::Get();
     vkDestroyPipeline(renderer.getDevice(), m_pipeline, nullptr);
+    vkDestroyPipelineLayout(renderer.getDevice(), m_pipelineLayout, nullptr);
+    for (VkDescriptorSetLayout &vkDescriptorSetLayout : m_descriptorSetLayouts)
+    {
+        vkDestroyDescriptorSetLayout(renderer.getDevice(), vkDescriptorSetLayout, nullptr);
+    }
 }

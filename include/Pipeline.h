@@ -49,7 +49,8 @@ class ComputePipeline
   public:
     struct State
     {
-        const VkPipelineLayout &layout;
+        std::span<VkPushConstantRange> pushConstantRanges;
+        const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &layouts;
         const Shader &shader;
     };
     ComputePipeline(const State &state);
@@ -57,6 +58,7 @@ class ComputePipeline
 
   public:
     VkPipelineLayout m_pipelineLayout;
+    std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> m_descriptorSetLayouts;
     VkPipeline m_pipeline;
     void freeResources();
 };
