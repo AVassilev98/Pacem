@@ -1,6 +1,6 @@
 #pragma once
-#include "common.h"
-#include "types.h"
+#include "Common.h"
+#include "Types.h"
 #include "vulkan/vulkan.h"
 #include <optional>
 #include <span>

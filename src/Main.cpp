@@ -1,5 +1,5 @@
+#include "Common.h"
 #include "array"
-#include "common.h"
 #include "glm/fwd.hpp"
 #include "iostream"
 #include "vector"
@@ -16,15 +16,15 @@
 #define VMA_IMPLEMENTATION
 #include "vma.h"
 
-#include "camera.h"
-#include "common.h"
-#include "gui.h"
-#include "pipeline.h"
-#include "renderer.h"
-#include "renderpass.h"
-#include "shader.h"
-#include "types.h"
-#include "vkinit.h"
+#include "Camera.h"
+#include "Common.h"
+#include "Gui.h"
+#include "Pipeline.h"
+#include "RenderPass.h"
+#include "Renderer.h"
+#include "Shader.h"
+#include "Types.h"
+#include "VkInit.h"
 
 int main()
 {

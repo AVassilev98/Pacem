@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GpuResource.h"
-#include "renderpass.h"
+#include "RenderPass.h"
 #include <vulkan/vulkan_core.h>
 
 class Gui : public RenderPass

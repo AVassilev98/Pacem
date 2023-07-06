@@ -112,17 +112,17 @@ add_library(imgui
 target_include_directories(imgui PUBLIC imgui)
 
 add_executable(Pacem
-    src/main.cpp
-    src/mesh.cpp
-    src/renderer.cpp
-    src/vkinit.cpp
-    src/shader.cpp
-    src/pipeline.cpp
+    src/Main.cpp
+    src/Mesh.cpp
+    src/Renderer.cpp
+    src/VkInit.cpp
+    src/Shader.cpp
+    src/Pipeline.cpp
     src/GpuResource.cpp
     src/PerFrameResource.cpp
-    src/renderpass.cpp
-    src/gui.cpp
-    src/camera.cpp
+    src/RenderPass.cpp
+    src/Gui.cpp
+    src/Camera.cpp
 )
 target_include_directories(Pacem PUBLIC include)
 target_include_directories(Pacem PUBLIC imgui)

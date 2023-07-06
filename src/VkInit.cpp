@@ -1,7 +1,7 @@
-#include "common.h"
-#include "renderer.h"
-#include "shader.h"
-#include "vkinit.h"
+#include "Common.h"
+#include "Renderer.h"
+#include "Shader.h"
+#include "VkInit.h"
 #include <vulkan/vulkan_core.h>
 
 VkPipelineShaderStageCreateInfo VkInit::CreateVkPipelineShaderStageCreateInfo(const Shader &shader)

@@ -1,7 +1,7 @@
 #pragma once
+#include "Pipeline.h"
 #include "ResourcePool.h"
-#include "pipeline.h"
-#include "types.h"
+#include "Types.h"
 #include <vector>
 #include <vulkan/vulkan.h>
 

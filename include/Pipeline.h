@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common.h"
-#include "shader.h"
+#include "Common.h"
+#include "Shader.h"
 #include <optional>
 #include <span>
 #include <vulkan/vulkan_core.h>

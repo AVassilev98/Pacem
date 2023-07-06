@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "Camera.h"
 #include "glm/common.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"

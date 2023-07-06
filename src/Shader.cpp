@@ -1,6 +1,6 @@
-#include "common.h"
-#include "renderer.h"
-#include "shader.h"
+#include "Common.h"
+#include "Renderer.h"
+#include "Shader.h"
 #include <fstream>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>

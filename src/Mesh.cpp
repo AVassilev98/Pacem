@@ -3,18 +3,18 @@
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
+#include "Common.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
-#include "common.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include "GpuResource.h"
-#include "mesh.h"
-#include "renderer.h"
-#include "vkinit.h"
+#include "Mesh.h"
+#include "Renderer.h"
+#include "VkInit.h"
 
 namespace
 {

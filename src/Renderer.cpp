@@ -13,11 +13,11 @@
 #define GGLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
+#include "Common.h"
+#include "RenderPass.h"
+#include "Renderer.h"
 #include "ResourcePool.h"
-#include "common.h"
-#include "renderer.h"
-#include "renderpass.h"
-#include "types.h"
+#include "Types.h"
 
 [[nodiscard]] Renderer &Renderer::Get()
 {

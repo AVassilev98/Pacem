@@ -1,7 +1,7 @@
 #include "GpuResource.h"
-#include "renderer.h"
-#include "types.h"
-#include "vkinit.h"
+#include "Renderer.h"
+#include "Types.h"
+#include "VkInit.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>

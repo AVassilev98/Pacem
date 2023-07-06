@@ -3,12 +3,12 @@
 #include <vulkan/vulkan_core.h>
 
 #include "GpuResource.h"
+#include "Mesh.h"
 #include "PerFrameResource.h"
+#include "Pipeline.h"
 #include "ResourcePool.h"
+#include "Types.h"
 #include "backends/imgui_impl_vulkan.h"
-#include "mesh.h"
-#include "pipeline.h"
-#include "types.h"
 
 class Renderer
 {

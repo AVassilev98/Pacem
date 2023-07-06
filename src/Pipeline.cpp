@@ -1,7 +1,7 @@
-#include "common.h"
-#include "pipeline.h"
-#include "renderer.h"
-#include "vkinit.h"
+#include "Common.h"
+#include "Pipeline.h"
+#include "Renderer.h"
+#include "VkInit.h"
 #include <array>
 #include <assert.h>
 #include <span>

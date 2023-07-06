@@ -1,10 +1,10 @@
 #pragma once
 
-#include "camera.h"
-#include "mesh.h"
-#include "pipeline.h"
-#include "renderer.h"
-#include "types.h"
+#include "Camera.h"
+#include "Mesh.h"
+#include "Pipeline.h"
+#include "Renderer.h"
+#include "Types.h"
 #include <functional>
 #include <memory>
 #include <stdexcept>

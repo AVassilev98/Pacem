@@ -1,10 +1,10 @@
 #include "PerFrameResource.h"
 
 #include "GpuResource.h"
+#include "Renderer.h"
 #include "ResourcePool.h"
-#include "renderer.h"
-#include "types.h"
-#include "vkinit.h"
+#include "Types.h"
+#include "VkInit.h"
 #include <array>
 
 namespace
