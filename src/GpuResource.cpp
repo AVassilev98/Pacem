@@ -1,11 +1,13 @@
-#include "gpuresource.h"
+#include "GpuResource.h"
 #include "renderer.h"
+#include "types.h"
 #include "vkinit.h"
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <vulkan/vulkan_core.h>
 
-Buffer::Buffer(const State &state)
+Buffer::Buffer(const State &&state)
     : m_size(state.size)
 {
     Renderer &renderer = Renderer::Get();
@@ -33,50 +35,58 @@ Buffer::Buffer(const State &state)
     m_buffer = VkInit::CreateVkBuffer(bufferState);
 }
 
-void Buffer::freeResources()
+void Buffer::destroy()
 {
     Renderer &renderer = Renderer::Get();
     vmaDestroyBuffer(renderer.getAllocator(), m_buffer, m_allocation);
 }
 
-Image::Image(const State &state)
+Image::Image(const State &&state)
     : m_width(state.width)
     , m_height(state.height)
     , m_aspectMask(state.aspectMask)
     , m_mutableFormat(state.mutableFormat)
+    , m_preallocated(state.preAllocatedImage)
 {
     Renderer &renderer = Renderer::Get();
 
-    std::array<uint32_t, static_cast<uint32_t>(QueueFamily::Size)> queueFamilyIndices;
-    for (uint32_t i = 0; i < state.families.size(); i++)
+    if (state.preAllocatedImage == VK_NULL_HANDLE)
     {
-        queueFamilyIndices[i] = renderer.getQueueFamilyIdx(state.families[i]);
+        std::array<uint32_t, static_cast<uint32_t>(QueueFamily::Size)> queueFamilyIndices;
+        for (uint32_t i = 0; i < state.families.size(); i++)
+        {
+            queueFamilyIndices[i] = renderer.getQueueFamilyIdx(state.families[i]);
+        }
+
+        VmaAllocationState allocationState = {
+            .allocation = m_allocation,
+            .allocationInfo = m_allocationInfo,
+            .usage = state.vmaUsage,
+            .flags = state.vmaFlags,
+        };
+
+        VkInit::ImageState imageState = {
+            .format = state.format,
+            .width = state.width,
+            .height = state.height,
+            .samples = state.samples,
+            .usage = state.usage,
+            .queueFamilyIndices = queueFamilyIndices,
+            .initialLayout = state.initialLayout,
+            .allocation = allocationState,
+        };
+        m_image = VkInit::CreateVkImage(imageState);
     }
-
-    VmaAllocationState allocationState = {
-        .allocation = m_allocation,
-        .allocationInfo = m_allocationInfo,
-        .usage = state.vmaUsage,
-        .flags = state.vmaFlags,
-    };
-
-    VkInit::ImageState imageState = {
-        .format = state.format,
-        .width = state.width,
-        .height = state.height,
-        .samples = state.samples,
-        .usage = state.usage,
-        .queueFamilyIndices = queueFamilyIndices,
-        .initialLayout = state.initialLayout,
-        .allocation = allocationState,
-    };
-    m_image = VkInit::CreateVkImage(imageState);
+    else
+    {
+        m_image = state.preAllocatedImage;
+    }
     addImageViewFormat(state.format);
 }
 
 void Image::addImageViewFormat(VkFormat format)
 {
-#if DEBUG
+#ifndef NDEBUG
     assert(format != VK_FORMAT_UNDEFINED && "Should not add undefined format view!");
     if (m_numImageViews && !m_mutableFormat)
     {
@@ -86,7 +96,7 @@ void Image::addImageViewFormat(VkFormat format)
     for (uint32_t i = 0; i < m_numImageViews; i++)
     {
         std::pair<VkFormat, VkImageView> &kv = m_imageViews[i];
-        assert(kv.first != format && "Should not add duplicate imageView!");
+        assert(kv.first == format && "Should not add duplicate imageView!");
     }
 #endif
 
@@ -98,7 +108,7 @@ void Image::addImageViewFormat(VkFormat format)
     m_imageViews[m_numImageViews++] = {format, VkInit::CreateVkImageView(imageViewState)};
 }
 
-VkImageView Image::getImageViewByFormat(VkFormat format) const
+VkImageView Image::getImageViewByFormat(VkFormat format)
 {
     if (format == VK_FORMAT_MAX_ENUM)
     {
@@ -118,7 +128,7 @@ VkImageView Image::getImageViewByFormat(VkFormat format) const
     return VK_NULL_HANDLE;
 }
 
-void Image::freeResources()
+void Image::destroy()
 {
     Renderer &renderer = Renderer::Get();
 
@@ -126,10 +136,13 @@ void Image::freeResources()
     {
         vkDestroyImageView(renderer.getDevice(), m_imageViews[i].second, nullptr);
     }
-    vmaDestroyImage(renderer.getAllocator(), m_image, m_allocation);
+    if (!m_preallocated)
+    {
+        vmaDestroyImage(renderer.getAllocator(), m_image, m_allocation);
+    }
 }
 
-Framebuffer::Framebuffer(const State &state)
+Framebuffer::Framebuffer(const State &&state)
     : m_renderPass(state.renderpass)
 {
     m_width = std::numeric_limits<unsigned>::max();
@@ -154,7 +167,7 @@ Framebuffer::Framebuffer(const State &state)
     m_frameBuffer = VkInit::CreateVkFramebuffer(framebufferState);
 }
 
-void Framebuffer::freeResources()
+void Framebuffer::destroy()
 {
     Renderer &renderer = Renderer::Get();
 

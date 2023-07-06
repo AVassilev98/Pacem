@@ -2,6 +2,7 @@
 #include "GLFW/glfw3.h"
 #include "glm/fwd.hpp"
 #include "vma.h"
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
 #include <string>
@@ -9,6 +10,16 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+
+template <typename T, typename IdxType>
+struct Handle;
+
+template <typename T>
+struct PerFrame;
+
+struct Image;
+struct Buffer;
+struct Framebuffer;
 
 struct RenderPass;
 

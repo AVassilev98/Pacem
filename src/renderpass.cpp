@@ -1,9 +1,9 @@
 #include "GLFW/glfw3.h"
+#include "GpuResource.h"
 #include "common.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/glm.hpp"
-#include "gpuresource.h"
 #include "imgui.h"
 #include "renderer.h"
 #include "renderpass.h"
@@ -30,50 +30,38 @@ void RenderPass::fulfillRenderPassDependencies(VkCommandBuffer cmd, uint32_t fra
 void DeferredRenderPass::createFrameBuffers(VkRenderPass renderPass)
 {
     Renderer &renderer = Renderer::Get();
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     const SwapchainInfo &swapchainInfo = renderer.getSwapchainInfo();
-
-    m_framebuffers.resize(maxFramesInFlight);
-    m_diffuseBuffers.resize(maxFramesInFlight);
-    m_normalBuffers.resize(maxFramesInFlight);
     auto imageFamily = std::to_array<QueueFamily>({QueueFamily::Graphics});
 
-    Image::State diffuseColorBufferState = {
+    m_outputImages = Renderer::Get().getSwapchainImages();
+    m_diffuseBuffers = PerFrameImage({
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .width = renderer.getSwapchainInfo().width,
         .height = renderer.getSwapchainInfo().height,
-        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .format = VK_FORMAT_B8G8R8A8_UNORM,
         .families = imageFamily,
         .mutableFormat = false,
-    };
-
-    Image::State normalBufferState = {
+    });
+    m_normalBuffers = PerFrameImage({
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .width = renderer.getSwapchainInfo().width,
         .height = renderer.getSwapchainInfo().height,
-        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .format = VK_FORMAT_R16G16_SFLOAT,
         .families = imageFamily,
         .mutableFormat = false,
-    };
+    });
 
-    m_outputImages = Renderer::Get().getSwapchainImages();
-    for (int i = 0; i < maxFramesInFlight; i++)
-    {
-        m_diffuseBuffers[i] = Image(diffuseColorBufferState);
-        m_normalBuffers[i] = Image(normalBufferState);
+    auto attachments = std::to_array<PerFrameImageRef>({
+        {VK_FORMAT_B8G8R8A8_UNORM, m_diffuseBuffers},
+        {VK_FORMAT_R16G16_SFLOAT, m_normalBuffers},
+        {VK_FORMAT_D32_SFLOAT, m_depthImages},
+    });
 
-        auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_UNORM, &m_diffuseBuffers[i]},
-            {VK_FORMAT_R16G16_SFLOAT, &m_normalBuffers[i]},
-            {VK_FORMAT_D32_SFLOAT, &m_depthImages[i]},
-        });
-
-        Framebuffer::State framebufferState = {
-            .images = std::span(attachments),
-            .renderpass = renderPass,
-        };
-        m_framebuffers[i] = Framebuffer(framebufferState);
-    }
+    m_framebuffers = PerFrameFramebuffer({
+        .images = std::span(attachments),
+        .renderpass = renderPass,
+    });
 
     updateGBuffer();
 }
@@ -199,19 +187,18 @@ DeferredRenderPass::DeferredRenderPass(const std::span<Shader *> &shaders, const
 void DeferredRenderPass::updateGBuffer()
 {
     Renderer &renderer = Renderer::Get();
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
 
-    m_gBuffer.m_diffuseBuffers = std::span(m_diffuseBuffers.data(), m_diffuseBuffers.size());
-    m_gBuffer.m_normalBuffers = std::span(m_normalBuffers.data(), m_normalBuffers.size());
-    m_gBuffer.m_depthImages = std::span(m_depthImages.data(), m_depthImages.size());
+    m_gBuffer.m_diffuseBuffers = m_diffuseBuffers;
+    m_gBuffer.m_normalBuffers = m_normalBuffers;
+    m_gBuffer.m_depthImages = m_depthImages;
 }
 
 void DeferredRenderPass::resize(uint32_t width, uint32_t height)
 {
-    for (uint32_t i = 0; i < m_framebuffers.size(); i++)
-    {
-        m_framebuffers[i].freeResources();
-    }
+    m_framebuffers.destroy();
+    m_normalBuffers.destroy();
+    m_diffuseBuffers.destroy();
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
@@ -233,7 +220,7 @@ void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_outputImages[0].m_width, m_outputImages[0].m_height};
+    renderArea.extent = renderer.getDrawAreaExtent();
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
@@ -245,7 +232,7 @@ void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex
     renderPassBeginInfo.clearValueCount = 3;
     renderPassBeginInfo.pClearValues = clearValues;
 
-    VkExtent2D windowExtent = renderer.getWindowExtent();
+    VkExtent2D windowExtent = renderer.getDrawAreaExtent();
     VkViewport viewport;
     viewport.height = static_cast<float>(windowExtent.height);
     viewport.width = static_cast<float>(windowExtent.width);
@@ -258,7 +245,7 @@ void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex
     scissor.offset = {0, 0};
     scissor.extent = {(uint32_t)windowExtent.width, (uint32_t)windowExtent.height};
 
-    renderPassBeginInfo.framebuffer = m_framebuffers[frameIndex].m_frameBuffer;
+    renderPassBeginInfo.framebuffer = m_framebuffers.curFrameData()->m_frameBuffer;
 
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -277,49 +264,38 @@ void DeferredRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex
 
 DeferredRenderPass::~DeferredRenderPass()
 {
-    for (uint32_t i = 0; i < m_outputImages.size(); i++)
-    {
-        m_framebuffers[i].freeResources();
-    }
+    m_framebuffers.destroy();
     m_pipeline.freeResources();
 }
 
 void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
 {
     Renderer &renderer = Renderer::Get();
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     const SwapchainInfo &swapchainInfo = renderer.getSwapchainInfo();
 
-    m_multisampledImages.reserve(maxFramesInFlight);
-    m_depthImages.reserve(maxFramesInFlight);
-
     QueueFamily imageFamily = QueueFamily::Graphics;
-    Image::State depthBufState = {
+
+    PerFrameImage swapchainImages = Renderer::Get().getSwapchainImages();
+    m_depthImages = PerFrameImage(Image::State{
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         .width = swapchainInfo.width,
         .height = swapchainInfo.height,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         .format = VK_FORMAT_D32_SFLOAT,
         .families = {&imageFamily, 1},
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-    };
+    });
+    swapchainImages.addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
+    auto attachments = std::to_array<PerFrameImageRef>({
+        {VK_FORMAT_B8G8R8A8_UNORM, swapchainImages},
+        {VK_FORMAT_D32_SFLOAT, m_depthImages},
+    });
 
-    for (uint32_t i = 0; i < maxFramesInFlight; i++)
-    {
-        m_multisampledImages.push_back(&Renderer::Get().getSwapchainImages()[i]);
-        m_depthImages.push_back(depthBufState);
-        m_multisampledImages[i]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
-        auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_UNORM, m_multisampledImages[i]},
-            {VK_FORMAT_D32_SFLOAT, &m_depthImages[i]},
-        });
-
-        Framebuffer::State framebufferState = {
-            .images = std::span(attachments),
-            .renderpass = renderPass,
-        };
-        m_framebuffers.emplace_back(framebufferState);
-    }
+    m_framebuffers = PerFrameFramebuffer(Framebuffer::PerFrameState{
+        .images = std::span(attachments),
+        .renderpass = renderPass,
+    });
 }
 
 EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
@@ -391,11 +367,8 @@ EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const Use
 
 EditorRenderPass::~EditorRenderPass()
 {
-    for (uint32_t i = 0; i < m_multisampledImages.size(); i++)
-    {
-        m_framebuffers[i].freeResources();
-        m_depthImages[i].freeResources();
-    }
+    m_framebuffers.destroy();
+    m_depthImages.destroy();
     m_pipeline.freeResources();
 }
 
@@ -414,7 +387,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_multisampledImages[0]->m_width, m_multisampledImages[0]->m_height};
+    renderArea.extent = Renderer::Get().getDrawAreaExtent();
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
@@ -425,7 +398,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
     renderPassBeginInfo.clearValueCount = 2;
     renderPassBeginInfo.pClearValues = clearValues;
 
-    VkExtent2D windowExtent = Renderer::Get().getWindowExtent();
+    VkExtent2D windowExtent = Renderer::Get().getDrawAreaExtent();
     VkViewport viewport;
     viewport.height = static_cast<float>(windowExtent.height);
     viewport.width = static_cast<float>(windowExtent.width);
@@ -438,7 +411,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
     scissor.offset = {0, 0};
     scissor.extent = {(uint32_t)windowExtent.width, (uint32_t)windowExtent.height};
 
-    renderPassBeginInfo.framebuffer = m_framebuffers[frameIdx].m_frameBuffer;
+    renderPassBeginInfo.framebuffer = m_framebuffers.curFrameData()->m_frameBuffer;
 
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -453,39 +426,29 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
 
 void EditorRenderPass::resize(uint32_t width, uint32_t height)
 {
-    for (uint32_t i = 0; i < m_multisampledImages.size(); i++)
-    {
-        m_framebuffers[i].freeResources();
-        m_depthImages[i].freeResources();
-    }
-    m_framebuffers.clear();
-    m_multisampledImages.clear();
-    m_depthImages.clear();
+    m_framebuffers.destroy();
+    m_depthImages.destroy();
     createFrameBuffers(m_pipeline.m_renderPass);
 }
 
-void DeferredRenderPass::declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages)
+void DeferredRenderPass::declareImageDependency(PerFrameImage &depthImages)
 {
     auto dependencyExecutor = [&](VkCommandBuffer, uint32_t) -> void
     {
         Renderer &renderer = Renderer::Get();
         bool frameBuffersDirty = false;
-
-        for (uint32_t i = 0; i < Renderer::Get().getMaxNumFramesInFlight(); i++)
+        if (m_depthImages.curFrameData() == nullptr)
         {
-            if (&m_depthImages[i] != &depthImages[i])
-            {
-                frameBuffersDirty = true;
-            }
+            frameBuffersDirty = true;
         }
-        m_depthImages = std::span(depthImages.data(), depthImages.size());
 
         if (frameBuffersDirty)
         {
-            for (uint32_t i = 0; i < m_framebuffers.size(); i++)
-            {
-                m_framebuffers[i].freeResources();
-            }
+            // TODO: Nasty hack, we shouldn't have to destroy everything here! RenderGraph should fix it
+            m_depthImages = depthImages;
+            m_diffuseBuffers.destroy();
+            m_normalBuffers.destroy();
+            m_framebuffers.destroy();
             createFrameBuffers(m_pipeline.m_renderPass);
         }
     };
@@ -495,7 +458,7 @@ void DeferredRenderPass::declareImageDependency(std::vector<Image *> &colorImage
 void ShadingRenderPass::updateDescriptorSet(VkCommandBuffer buffer, uint32_t frameIdx)
 {
     Renderer &renderer = Renderer::Get();
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
 
     VkImageMemoryBarrier imageBarrier = {};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -517,28 +480,29 @@ void ShadingRenderPass::updateDescriptorSet(VkCommandBuffer buffer, uint32_t fra
         .imageSampler = VK_NULL_HANDLE,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
     };
+    PerFrameImage swapchainImages = renderer.getSwapchainImages();
 
     imageBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    imageBarrier.image = m_gBuffer->m_diffuseBuffers[frameIdx].m_image;
+    imageBarrier.image = m_gBuffer->m_diffuseBuffers.curFrameData()->m_image;
     vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
                          &imageBarrier);
-    descriptorUpdateState.imageView = m_gBuffer->m_diffuseBuffers[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.imageView = m_gBuffer->m_diffuseBuffers.getImageViewByFormat();
     descriptorUpdateState.binding = 0;
     renderer.updateDescriptor(descriptorUpdateState);
 
     imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    imageBarrier.image = m_gBuffer->m_normalBuffers[frameIdx].m_image;
+    imageBarrier.image = m_gBuffer->m_normalBuffers.curFrameData()->m_image;
     vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
                          &imageBarrier);
-    descriptorUpdateState.imageView = m_gBuffer->m_normalBuffers[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.imageView = m_gBuffer->m_normalBuffers.getImageViewByFormat();
     descriptorUpdateState.binding = 1;
     renderer.updateDescriptor(descriptorUpdateState);
 
     imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    imageBarrier.image = Renderer::Get().getSwapchainImages()[frameIdx].m_image;
+    imageBarrier.image = swapchainImages.curFrameData()->m_image;
     vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0,
                          nullptr, 1, &imageBarrier);
-    descriptorUpdateState.imageView = Renderer::Get().getSwapchainImages()[frameIdx].getImageViewByFormat();
+    descriptorUpdateState.imageView = swapchainImages.curFrameData()->getImageViewByFormat();
     descriptorUpdateState.binding = 2;
     renderer.updateDescriptor(descriptorUpdateState);
 }
@@ -547,29 +511,27 @@ void ShadingRenderPass::createImages()
 {
     Renderer &renderer = Renderer::Get();
 
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     m_lightingDescriptorSets.resize(maxFramesInFlight);
     auto queueFamilies = std::to_array<QueueFamily>({QueueFamily::Graphics});
 
-    Image::State outputImageState = {
-        .width = renderer.getSwapchainImages()[0].m_width,
-        .height = renderer.getSwapchainImages()[0].m_height,
+    PerFrameImage swapchainImages = renderer.getSwapchainImages();
+    VkExtent2D windowExtent = renderer.getDrawAreaExtent();
+
+    m_outputImages = PerFrameImage({
         .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .width = windowExtent.width,
+        .height = windowExtent.height,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .families = queueFamilies,
-    };
-
-    for (uint32_t i = 0; i < maxFramesInFlight; i++)
-    {
-        m_outputImages[i] = Image(outputImageState);
-    }
+    });
 }
 
 void ShadingRenderPass::createDescriptorSets()
 {
     Renderer &renderer = Renderer::Get();
 
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     for (uint32_t i = 0; i < maxFramesInFlight; i++)
     {
         m_lightingDescriptorSets[i][DSL_FREQ_PER_PASS] = renderer.allocateDescriptorSet(m_lightingDescriptorSetLayouts[DSL_FREQ_PER_PASS]);
@@ -626,7 +588,7 @@ ShadingRenderPass::~ShadingRenderPass()
 
 void ShadingRenderPass::resize(uint32_t width, uint32_t height)
 {
-    uint32_t maxFramesInFlight = Renderer::Get().getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = Renderer::Get().numFramesInFlight();
     // for (uint32_t i = 0; i < maxFramesInFlight; i++)
     // {
     //     m_outputImages[i].freeResources();
@@ -639,8 +601,8 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
     glm::u32vec3 blockDim = {32, 32, 1};
     assert(m_gBuffer && "GBuffer must be set");
 
-    uint32_t gBufWidth = m_gBuffer->m_diffuseBuffers[frameIdx].m_width;
-    uint32_t gBufHeight = m_gBuffer->m_diffuseBuffers[frameIdx].m_height;
+    uint32_t gBufWidth = m_gBuffer->m_diffuseBuffers.curFrameData()->m_width;
+    uint32_t gBufHeight = m_gBuffer->m_diffuseBuffers.curFrameData()->m_height;
 
     PushConstants pushConstants = {
         .M = glm::mat4(),
@@ -677,8 +639,8 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
     };
 
     VkOffset3D startOffset = {0, 0, 0};
-    VkOffset3D endOffset
-        = {(int32_t)m_gBuffer->m_diffuseBuffers[frameIdx].m_width, (int32_t)m_gBuffer->m_diffuseBuffers[frameIdx].m_height, 1};
+    Image *curImage = m_gBuffer->m_diffuseBuffers.curFrameData();
+    VkOffset3D endOffset = {(int32_t)curImage->m_width, (int32_t)curImage->m_height, 1};
     VkImageBlit imageBlit = {
         .srcSubresource = subresourceLayers,
         .srcOffsets = {
@@ -692,6 +654,8 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
         },
     };
 
+    PerFrameImage swapchainImages = Renderer::Get().getSwapchainImages();
+
     VkImageMemoryBarrier imageBarrierSwapchain = {};
     imageBarrierSwapchain.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     imageBarrierSwapchain.srcAccessMask = 0;
@@ -700,12 +664,12 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
     imageBarrierSwapchain.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // New layout
     imageBarrierSwapchain.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     imageBarrierSwapchain.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageBarrierSwapchain.image = Renderer::Get().getSwapchainImages()[frameIdx].m_image; // The image to transition
-    imageBarrierSwapchain.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;        // Image aspect mask
-    imageBarrierSwapchain.subresourceRange.baseMipLevel = 0;                              // Base mip level
-    imageBarrierSwapchain.subresourceRange.levelCount = 1;                                // Number of mip levels
-    imageBarrierSwapchain.subresourceRange.baseArrayLayer = 0;                            // Base array layer
-    imageBarrierSwapchain.subresourceRange.layerCount = 1;                                // Number of layers
+    imageBarrierSwapchain.image = swapchainImages.curFrameData()->m_image;         // The image to transition
+    imageBarrierSwapchain.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Image aspect mask
+    imageBarrierSwapchain.subresourceRange.baseMipLevel = 0;                       // Base mip level
+    imageBarrierSwapchain.subresourceRange.levelCount = 1;                         // Number of mip levels
+    imageBarrierSwapchain.subresourceRange.baseArrayLayer = 0;                     // Base array layer
+    imageBarrierSwapchain.subresourceRange.layerCount = 1;                         // Number of layers
 
     auto imageMemoryBarriers = std::to_array<VkImageMemoryBarrier>({imageBarrierSwapchain});
 
@@ -713,7 +677,7 @@ void ShadingRenderPass::draw(VkCommandBuffer buffer, uint32_t frameIdx)
                          imageMemoryBarriers.size(), imageMemoryBarriers.data());
 }
 
-void ShadingRenderPass::declareGBufferDependency(const GBuffer &gBuffer)
+void ShadingRenderPass::declareGBufferDependency(GBuffer &gBuffer)
 {
     auto dependencyExecutor = [&](VkCommandBuffer, uint32_t) -> void
     {

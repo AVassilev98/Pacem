@@ -118,7 +118,8 @@ add_executable(Pacem
     src/vkinit.cpp
     src/shader.cpp
     src/pipeline.cpp
-    src/gpuresource.cpp
+    src/GpuResource.cpp
+    src/PerFrameResource.cpp
     src/renderpass.cpp
     src/gui.cpp
     src/camera.cpp

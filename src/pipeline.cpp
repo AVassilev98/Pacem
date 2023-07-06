@@ -48,7 +48,7 @@ GraphicsPipeline::GraphicsPipeline(const State &state)
         .minSampleShading = 1.0f,
     };
 
-    VkExtent2D windowExtent = Renderer::Get().getWindowExtent();
+    VkExtent2D windowExtent = Renderer::Get().getDrawAreaExtent();
     VkRect2D scissor = state.dynamicState.scissor.has_value() ? state.dynamicState.scissor.value()
                                                               : VkRect2D{
                                                                   .offset = {},

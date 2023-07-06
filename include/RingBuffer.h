@@ -51,8 +51,8 @@ class RingBuffer
     }
 
   private:
+    bool m_empty = true;
     T *m_data;
     IndexType m_head = 0;
     IndexType m_tail = 0;
-    bool m_empty = true;
 };

@@ -35,6 +35,7 @@ int main()
     }
 
     Renderer &renderer = Renderer::Get();
+    renderer.createSwapchainImages();
     Gui &gui = Gui::Get();
 
     Shader lineVertShader(CONCAT(SHADER_PATH, "editorGrid.vert.spv"), Shader::Stage::Vertex);
@@ -55,17 +56,17 @@ int main()
     DeferredRenderPass mainRenderPass(mainShaders, mainCamera);
     ShadingRenderPass shadingRenderPass(lightCullShader, lightShadeShader, mainCamera);
     Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
-    mainRenderPass.addMesh(&suzanneMesh);
 
     renderer.addRenderPass(&editorRenderPass);
 
     renderer.addRenderPass(&mainRenderPass);
-    mainRenderPass.declareImageDependency(editorRenderPass.m_multisampledImages, editorRenderPass.m_depthImages);
+    mainRenderPass.declareImageDependency(editorRenderPass.m_depthImages);
 
     renderer.addRenderPass(&shadingRenderPass);
     shadingRenderPass.declareGBufferDependency(mainRenderPass.m_gBuffer);
 
     renderer.addRenderPass(&gui);
+    mainRenderPass.addMesh(&suzanneMesh);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;

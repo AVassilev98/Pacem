@@ -13,6 +13,7 @@
 #define GGLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
+#include "ResourcePool.h"
 #include "common.h"
 #include "renderer.h"
 #include "renderpass.h"
@@ -34,7 +35,7 @@
     return m_vmaAllocator;
 }
 
-[[nodiscard]] std::span<Image> Renderer::getSwapchainImages()
+[[nodiscard]] PerFrameImage Renderer::getSwapchainImages()
 {
     return m_swapchainImages;
 }
@@ -42,6 +43,61 @@
 [[nodiscard]] VkDescriptorPool Renderer::getDescriptorPool()
 {
     return m_descriptorPools.back();
+}
+
+[[nodiscard]] uint32_t Renderer::curFrame()
+{
+    return m_frameCount % m_swapchainInfo.numImages;
+}
+
+[[nodiscard]] uint32_t Renderer::frameCount()
+{
+    return m_frameCount;
+}
+
+[[nodiscard]] Handle<Buffer> Renderer::create(const Buffer::State &&state)
+{
+    return m_bufferPool.create(std::move(state));
+}
+
+[[nodiscard]] Buffer *Renderer::get(Handle<Buffer> handle)
+{
+    return m_bufferPool.get(handle);
+}
+
+void Renderer::destroy(Handle<Buffer> handle)
+{
+    return m_bufferPool.destroy(handle);
+}
+
+[[nodiscard]] Handle<Framebuffer> Renderer::create(const Framebuffer::State &&state)
+{
+    return m_framebufferPool.create(std::move(state));
+}
+
+[[nodiscard]] Framebuffer *Renderer::get(Handle<Framebuffer> handle)
+{
+    return m_framebufferPool.get(handle);
+}
+
+void Renderer::destroy(Handle<Framebuffer> handle)
+{
+    return m_framebufferPool.destroy(handle);
+}
+
+[[nodiscard]] Handle<Image> Renderer::create(const Image::State &&state)
+{
+    return m_imagePool.create(std::move(state));
+}
+
+[[nodiscard]] Image *Renderer::get(Handle<Image> handle)
+{
+    return m_imagePool.get(handle);
+}
+
+void Renderer::destroy(Handle<Image> handle)
+{
+    return m_imagePool.destroy(handle);
 }
 
 void Renderer::initImGuiGlfwVulkan(VkRenderPass renderPass)
@@ -75,8 +131,8 @@ void Renderer::initImGuiGlfwVulkan(VkRenderPass renderPass)
     init_info.Device = getDevice();
     init_info.Queue = m_transferQueue.graphicsQueue;
     init_info.DescriptorPool = m_imguiDescriptorPool;
-    init_info.MinImageCount = getMaxNumFramesInFlight();
-    init_info.ImageCount = getMaxNumFramesInFlight();
+    init_info.MinImageCount = numFramesInFlight();
+    init_info.ImageCount = numFramesInFlight();
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
     ImGui_ImplVulkan_Init(&init_info, renderPass);
@@ -570,52 +626,14 @@ void Renderer::destroyDescriptorPools()
     }
 }
 
-std::vector<Image> Renderer::getSwapchainImagesFromWindow()
+void Renderer::createSwapchainImages()
 {
-    std::vector<Image> images(getMaxNumFramesInFlight());
-    std::vector<VkImage> vkImages(getMaxNumFramesInFlight());
-
-    uint32_t swapchainImageCount = 0;
-    VK_LOG_ERR(vkGetSwapchainImagesKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, &swapchainImageCount, nullptr));
-    VK_LOG_ERR(vkGetSwapchainImagesKHR(m_deviceInfo.device, m_swapchainInfo.swapchain, &swapchainImageCount, vkImages.data()));
-
-    VkImageSubresourceRange subResourceRange;
-    subResourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subResourceRange.baseArrayLayer = 0;
-    subResourceRange.baseMipLevel = 0;
-    subResourceRange.layerCount = 1;
-    subResourceRange.levelCount = 1;
-
-    for (uint32_t i = 0; i < swapchainImageCount; i++)
-    {
-        images[i].m_image = vkImages[i];
-        images[i].m_width = m_swapchainInfo.width;
-        images[i].m_height = m_swapchainInfo.height;
-        images[i].m_aspectMask = subResourceRange.aspectMask;
-
-        VkImageViewCreateInfo imageViewCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        imageViewCreateInfo.image = vkImages[i];
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        imageViewCreateInfo.format = m_windowInfo.preferredSurfaceFormat.format;
-        imageViewCreateInfo.subresourceRange = subResourceRange;
-
-        VK_LOG_ERR(vkCreateImageView(m_deviceInfo.device, &imageViewCreateInfo, nullptr, &images[i].m_imageViews[0].second));
-        images[i].m_imageViews[0].first = m_windowInfo.preferredSurfaceFormat.format;
-        images[i].m_numImageViews = 1;
-    }
-
-    return images;
+    m_swapchainImages = PerFrameImage(m_swapchainInfo, m_windowInfo);
 }
 
 void Renderer::freeSwapchainImages()
 {
-    for (Image &image : m_swapchainImages)
-    {
-        for (std::pair<VkFormat, VkImageView> &kv : image.m_imageViews)
-        {
-            vkDestroyImageView(m_deviceInfo.device, kv.second, nullptr);
-        }
-    }
+    m_swapchainImages.destroy();
 }
 
 static VkCommandPool createCommandPool(const VkDevice device, uint32_t queueFamilyIndex)
@@ -722,7 +740,6 @@ bool Renderer::exitSignal()
 VkResult Renderer::draw()
 {
     uint32_t frameIdx = (m_frameCount) % m_swapchainInfo.numImages;
-    m_frameCount++;
     VK_LOG_ERR(vkWaitForFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx], VK_TRUE, UINT64_MAX));
     VK_LOG_ERR(vkResetFences(m_deviceInfo.device, 1, &m_renderContext.fences[frameIdx]));
 
@@ -767,6 +784,7 @@ VkResult Renderer::draw()
         return VK_SUCCESS;
     }
 
+    m_frameCount++;
     VK_LOG_ERR(presentStatus);
     return presentStatus;
 }
@@ -823,6 +841,13 @@ void Renderer::destroyDebugMessenger()
     destroyDebugMessagerFunc(m_instance, m_debugMessenger, nullptr);
 }
 
+VkExtent2D Renderer::getDrawAreaExtent()
+{
+    return VkExtent2D{
+        m_swapchainInfo.width,
+        m_swapchainInfo.height,
+    };
+}
 VkExtent2D Renderer::getWindowExtent()
 {
     int width = 0;
@@ -849,7 +874,7 @@ uint32_t Renderer::getQueueFamilyIdx(QueueFamily family)
     }
 }
 
-Buffer Renderer::uploadBufferToGpu(VkBuffer src, Buffer::State &dstState)
+Handle<Buffer> Renderer::uploadBufferToGpu(VkBuffer src, const Buffer::State &&dstState)
 {
     VkBufferCopy copyInfo = {
         .srcOffset = 0,
@@ -857,10 +882,10 @@ Buffer Renderer::uploadBufferToGpu(VkBuffer src, Buffer::State &dstState)
         .size = dstState.size,
     };
 
-    Buffer gpuBuf(dstState);
+    Handle<Buffer> gpuBuf = create(std::move(dstState));
     VkCommandBufferBeginInfo commandBufferBeginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(m_transferQueue.immCmdBuf, &commandBufferBeginInfo);
-    vkCmdCopyBuffer(m_transferQueue.immCmdBuf, src, gpuBuf.m_buffer, 1, &copyInfo);
+    vkCmdCopyBuffer(m_transferQueue.immCmdBuf, src, get(gpuBuf)->m_buffer, 1, &copyInfo);
     vkEndCommandBuffer(m_transferQueue.immCmdBuf);
 
     VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -979,7 +1004,7 @@ void Renderer::transferImageImmediate(UploadInfo &info)
     vkDestroyFence(m_deviceInfo.device, transferFence, nullptr);
 }
 
-Image Renderer::uploadImageToGpu(VkBuffer src, Image::State &dstState)
+Handle<Image> Renderer::uploadImageToGpu(VkBuffer src, const Image::State &&dstState)
 {
     VkImageSubresourceLayers subResourceLayers = {};
     subResourceLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -995,13 +1020,13 @@ Image Renderer::uploadImageToGpu(VkBuffer src, Image::State &dstState)
     bufferImageCopy.imageOffset = {0, 0, 0};
     bufferImageCopy.imageExtent = {dstState.width, dstState.height, 1};
 
-    Image dst(dstState);
+    Handle<Image> dst = create(std::move(dstState));
     UploadInfo uploadInfo = {
         .src = src,
-        .dst = dst,
+        .dst = *get(dst),
     };
     transferImageImmediate(uploadInfo);
-    return std::move(dst);
+    return dst;
 }
 
 void Renderer::updateDescriptor(const DescriptorUpdateState &descriptorUpdateState)
@@ -1042,7 +1067,7 @@ void Renderer::writeDescriptor(const DescriptorWriteState &descriptorUpdateState
     vkUpdateDescriptorSets(m_deviceInfo.device, 1, &writeDiffuseDescriptorSet, 0, nullptr);
 }
 
-uint32_t Renderer::getMaxNumFramesInFlight()
+uint32_t Renderer::numFramesInFlight()
 {
     return m_swapchainInfo.numImages;
 }
@@ -1064,9 +1089,10 @@ void Renderer::handleResize()
     VkSwapchainKHR oldSwapchain = m_swapchainInfo.swapchain;
     m_swapchainInfo = createSwapchain(oldSwapchain);
     vkDestroySwapchainKHR(m_deviceInfo.device, oldSwapchain, nullptr);
-    m_swapchainImages = getSwapchainImagesFromWindow();
+    createSwapchainImages();
     for (RenderPass *renderPass : m_renderPasses)
     {
+        renderPass->fulfillRenderPassDependencies(VK_NULL_HANDLE, curFrame());
         renderPass->resize(m_swapchainInfo.width, m_swapchainInfo.height);
     }
 }
@@ -1083,7 +1109,6 @@ Renderer::Renderer()
     , m_vmaAllocator(createVmaAllocator())
     , m_swapchainInfo(createSwapchain())
     , m_descriptorPools({createDescriptorPool()})
-    , m_swapchainImages(getSwapchainImagesFromWindow())
     , m_renderContext(createRenderContext())
     , m_transferQueue(createTransferQueue())
 {
@@ -1138,6 +1163,65 @@ void Renderer::graphicsImmediate(std::function<void(VkCommandBuffer cmd)> &&func
     vkQueueSubmit(m_transferQueue.graphicsQueue, 1, &submitInfo, transferFence);
     vkWaitForFences(m_deviceInfo.device, 1, &transferFence, VK_TRUE, UINT64_MAX);
     vkDestroyFence(m_deviceInfo.device, transferFence, nullptr);
+}
+
+Handle<Image> Renderer::uploadTextureToGpu(const std::span<uint8_t> &buf, uint32_t width, uint32_t height)
+{
+    auto bufQueueFamilies = std::to_array({QueueFamily::Transfer});
+    Handle<Buffer> stagingBufferHandle = create({
+        .size = buf.size(),
+        .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .families = bufQueueFamilies,
+        .vmaFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    });
+    Buffer &stagingBuffer = *get(stagingBufferHandle);
+    memcpy(stagingBuffer.m_allocationInfo.pMappedData, buf.data(), buf.size());
+
+    auto texQueueFamilies = std::to_array({QueueFamily::Graphics, QueueFamily::Transfer});
+    Handle<Image> gpuImage
+        = uploadImageToGpu(stagingBuffer.m_buffer, Image::State({
+                                                       .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                                       .width = width,
+                                                       .height = height,
+                                                       .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                                       .families = texQueueFamilies,
+                                                   }));
+
+    destroy(stagingBufferHandle);
+    return gpuImage;
+}
+
+Handle<Buffer> Renderer::uploadCpuBufferToGpu(const std::span<uint8_t> &buf, VkBufferUsageFlags usage)
+{
+    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    stagingBufferInfo.size = buf.size();
+    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    auto queueFamilyIndices = std::to_array({m_deviceInfo.graphicsQueueFamily, m_deviceInfo.transferQueueFamily});
+    stagingBufferInfo.pQueueFamilyIndices = queueFamilyIndices.data();
+    stagingBufferInfo.queueFamilyIndexCount = queueFamilyIndices.size();
+
+    VmaAllocationCreateInfo vmaStagingBufAllocInfo = {};
+    vmaStagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vmaStagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VkBuffer stagingBuf;
+    VmaAllocation stagingAlloc;
+    VmaAllocationInfo stagingAllocInfo;
+    VK_LOG_ERR(vmaCreateBuffer(m_vmaAllocator, &stagingBufferInfo, &vmaStagingBufAllocInfo, &stagingBuf, &stagingAlloc, &stagingAllocInfo));
+    memcpy(stagingAllocInfo.pMappedData, buf.data(), stagingBufferInfo.size);
+
+    auto queueFamilies = std::to_array({QueueFamily::Graphics, QueueFamily::Transfer});
+    usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    Handle<Buffer> gpuBuffer = uploadBufferToGpu(stagingBuf, Buffer::State{
+                                                                 .size = static_cast<uint32_t>(stagingBufferInfo.size),
+                                                                 .usage = usage,
+                                                                 .families = queueFamilies,
+                                                             });
+
+    vmaDestroyBuffer(m_vmaAllocator, stagingBuf, stagingAlloc);
+    return gpuBuffer;
 }
 
 Renderer::~Renderer()

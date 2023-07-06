@@ -1,4 +1,5 @@
 #include <array>
+#include <cstdint>
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
@@ -10,7 +11,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#include "gpuresource.h"
+#include "GpuResource.h"
 #include "mesh.h"
 #include "renderer.h"
 #include "vkinit.h"
@@ -114,32 +115,32 @@ Mesh::Mesh(const std::string &path, const GraphicsPipeline &pipeline)
         if (textures.count(std::string(diffusePath.C_Str())))
         {
             printf("Found diffuse texture: %s in texture map!\n", diffusePath.C_Str());
-            Image &diffuseTexture = textures.at(std::string(diffusePath.C_Str()));
-            descriptorImageInfo.imageView = diffuseTexture.getImageViewByFormat();
+            Handle<Image> &diffuseTexture = textures.at(std::string(diffusePath.C_Str()));
+            descriptorImageInfo.imageView = renderer.get(diffuseTexture)->getImageViewByFormat();
             descriptorImageInfo.binding = 0;
             renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(aoPath.C_Str())))
         {
             printf("Found ambient occlusion texture: %s in texture map!\n", aoPath.C_Str());
-            Image &aoTexture = textures.at(std::string(aoPath.C_Str()));
-            descriptorImageInfo.imageView = aoTexture.getImageViewByFormat();
+            Handle<Image> &aoTexture = textures.at(std::string(aoPath.C_Str()));
+            descriptorImageInfo.imageView = renderer.get(aoTexture)->getImageViewByFormat();
             descriptorImageInfo.binding = 1;
             renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(emissivePath.C_Str())))
         {
             printf("Found emissive texture: %s in texture map!\n", emissivePath.C_Str());
-            Image &emissiveTexture = textures.at(std::string(emissivePath.C_Str()));
-            descriptorImageInfo.imageView = emissiveTexture.getImageViewByFormat();
+            Handle<Image> &emissiveTexture = textures.at(std::string(emissivePath.C_Str()));
+            descriptorImageInfo.imageView = renderer.get(emissiveTexture)->getImageViewByFormat();
             descriptorImageInfo.binding = 2;
             renderer.updateDescriptor(descriptorImageInfo);
         }
         if (textures.count(std::string(normalPath.C_Str())))
         {
             printf("Found normal map: %s in texture map!\n", normalPath.C_Str());
-            Image &normalTexture = textures.at(std::string(normalPath.C_Str()));
-            descriptorImageInfo.imageView = normalTexture.getImageViewByFormat();
+            Handle<Image> &normalTexture = textures.at(std::string(normalPath.C_Str()));
+            descriptorImageInfo.imageView = renderer.get(normalTexture)->getImageViewByFormat();
             descriptorImageInfo.binding = 3;
             renderer.updateDescriptor(descriptorImageInfo);
         }
@@ -199,15 +200,17 @@ Mesh::Mesh(const std::string &path, const GraphicsPipeline &pipeline)
         }
     }
 
-    vkVertexBuffer = renderer.uploadCpuBufferToGpu(std::span(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    vkIndexBuffer = renderer.uploadCpuBufferToGpu(std::span(faces), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vkVertexBuffer = renderer.uploadCpuBufferToGpu(std::span((uint8_t *)vertices.data(), vertices.size() * sizeof(vertices[0])),
+                                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    vkIndexBuffer = renderer.uploadCpuBufferToGpu(std::span((uint8_t *)faces.data(), faces.size() * sizeof(faces[0])),
+                                                  VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 void Mesh::drawMesh(VkCommandBuffer cmdBuf, VkPipelineLayout pipelineLayout)
 {
     VkDeviceSize offset = 0;
-    vkCmdBindIndexBuffer(cmdBuf, vkIndexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdBindVertexBuffers(cmdBuf, 0, 1, &vkVertexBuffer.m_buffer, &offset);
+    vkCmdBindIndexBuffer(cmdBuf, Renderer::Get().get(vkIndexBuffer)->m_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindVertexBuffers(cmdBuf, 0, 1, &Renderer::Get().get(vkVertexBuffer)->m_buffer, &offset);
 
     for (uint32_t i = 0; i < meshletVertexOffsets.size(); i++)
     {
@@ -222,12 +225,14 @@ Mesh::~Mesh()
 {
     Renderer &renderer = Renderer::Get();
 
-    vmaDestroyBuffer(renderer.getAllocator(), vkVertexBuffer.m_buffer, vkVertexBuffer.m_allocation);
-    vmaDestroyBuffer(renderer.getAllocator(), vkIndexBuffer.m_buffer, vkIndexBuffer.m_allocation);
+    vmaDestroyBuffer(renderer.getAllocator(), Renderer::Get().get(vkVertexBuffer)->m_buffer,
+                     Renderer::Get().get(vkVertexBuffer)->m_allocation);
+    vmaDestroyBuffer(renderer.getAllocator(), Renderer::Get().get(vkIndexBuffer)->m_buffer,
+                     Renderer::Get().get(vkIndexBuffer)->m_allocation);
     vkFreeDescriptorSets(renderer.getDevice(), renderer.getDescriptorPool(), matDescriptorSets.size(), matDescriptorSets.data());
     vkDestroySampler(renderer.getDevice(), sampler, nullptr);
     for (auto &kv : textures)
     {
-        kv.second.freeResources();
+        renderer.destroy(kv.second);
     }
 }

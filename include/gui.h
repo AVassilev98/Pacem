@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GpuResource.h"
 #include "renderpass.h"
 #include <vulkan/vulkan_core.h>
 
@@ -22,5 +23,5 @@ class Gui : public RenderPass
   private:
     Gui();
     VkDescriptorPool m_imguiDescriptorPool;
-    std::vector<Image *> m_swapchainImages;
+    PerFrameImage m_swapchainImages;
 };

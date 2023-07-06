@@ -4,6 +4,7 @@
 #include "mesh.h"
 #include "pipeline.h"
 #include "renderer.h"
+#include "types.h"
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -19,7 +20,7 @@ class RenderPass
     void fulfillRenderPassDependencies(VkCommandBuffer cmd, uint32_t frameIdx);
 
   public:
-    std::vector<Framebuffer> m_framebuffers;
+    PerFrameFramebuffer m_framebuffers;
 
   protected:
     std::vector<Mesh *> m_meshes;
@@ -37,8 +38,8 @@ class EditorRenderPass : public RenderPass
     ~EditorRenderPass();
     GraphicsPipeline m_pipeline;
 
-    std::vector<Image *> m_multisampledImages;
-    std::vector<Image> m_depthImages;
+    PerFrameImage m_multisampledImages;
+    PerFrameImage m_depthImages;
 
   private:
     const UserControlledCamera &m_cameraRef;
@@ -47,9 +48,9 @@ class EditorRenderPass : public RenderPass
 
 struct GBuffer
 {
-    std::span<Image> m_diffuseBuffers;
-    std::span<Image> m_normalBuffers;
-    std::span<Image> m_depthImages;
+    PerFrameImage m_diffuseBuffers;
+    PerFrameImage m_normalBuffers;
+    PerFrameImage m_depthImages;
 };
 
 class DeferredRenderPass : public RenderPass
@@ -57,7 +58,7 @@ class DeferredRenderPass : public RenderPass
   public:
     virtual void resize(uint32_t width, uint32_t height) override;
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
-    void declareImageDependency(std::vector<Image *> &colorImages, std::vector<Image> &depthImages);
+    void declareImageDependency(PerFrameImage &depthImages);
 
   public:
     DeferredRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera);
@@ -69,11 +70,11 @@ class DeferredRenderPass : public RenderPass
     void createFrameBuffers(VkRenderPass renderPass);
     void updateGBuffer();
 
-    std::vector<Image> m_diffuseBuffers;
-    std::vector<Image> m_normalBuffers;
+    PerFrameImage m_diffuseBuffers;
+    PerFrameImage m_normalBuffers;
 
-    std::span<Image> m_outputImages;
-    std::span<Image> m_depthImages;
+    PerFrameImage m_outputImages;
+    PerFrameImage m_depthImages;
     const UserControlledCamera &m_cameraRef;
 };
 
@@ -82,7 +83,7 @@ class ShadingRenderPass : public RenderPass
   public:
     virtual void resize(uint32_t width, uint32_t height) override;
     virtual void draw(VkCommandBuffer buffer, uint32_t frameIdx) override;
-    void declareGBufferDependency(const GBuffer &gBuffer);
+    void declareGBufferDependency(GBuffer &gBuffer);
 
   public:
     ShadingRenderPass(const Shader &lightCullShader, const Shader &lightingShader, const UserControlledCamera &camera);
@@ -94,12 +95,12 @@ class ShadingRenderPass : public RenderPass
     void updateDescriptorSet(VkCommandBuffer commandBuffer, uint32_t frameIdx);
 
   private:
-    const GBuffer *m_gBuffer = nullptr;
-    std::vector<Image> m_outputImages = std::vector<Image>(Renderer::Get().getMaxNumFramesInFlight());
+    GBuffer *m_gBuffer = nullptr;
+    PerFrameImage m_outputImages;
 
     std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> m_lightingDescriptorSetLayouts;
     std::vector<std::array<VkDescriptorSet, DSL_FREQ_COUNT>> m_lightingDescriptorSets
-        = std::vector<std::array<VkDescriptorSet, DSL_FREQ_COUNT>>(Renderer::Get().getMaxNumFramesInFlight());
+        = std::vector<std::array<VkDescriptorSet, DSL_FREQ_COUNT>>(Renderer::Get().numFramesInFlight());
 
     ComputePipeline m_lightCullPipeline;
     ComputePipeline m_shadingPipeline;

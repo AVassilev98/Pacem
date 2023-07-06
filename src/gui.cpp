@@ -19,36 +19,25 @@ Gui &Gui::Get()
 void Gui::createFrameBuffers(VkRenderPass renderPass)
 {
     Renderer &renderer = Renderer::Get();
-    uint32_t maxFramesInFlight = renderer.getMaxNumFramesInFlight();
+    uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     const SwapchainInfo &swapchainInfo = renderer.getSwapchainInfo();
 
-    m_swapchainImages.reserve(maxFramesInFlight);
-    m_framebuffers.reserve(maxFramesInFlight);
+    m_swapchainImages = renderer.getSwapchainImages();
+    m_swapchainImages.addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
 
-    for (int i = 0; i < maxFramesInFlight; i++)
-    {
-        m_swapchainImages.emplace_back(&renderer.getSwapchainImages()[i]);
-        auto attachments = std::to_array<ImageRef>({
-            {VK_FORMAT_B8G8R8A8_UNORM, m_swapchainImages[i]},
-        });
-        m_swapchainImages[i]->addImageViewFormat(VK_FORMAT_B8G8R8A8_UNORM);
+    auto attachments = std::to_array<PerFrameImageRef>({
+        {VK_FORMAT_B8G8R8A8_UNORM, m_swapchainImages},
+    });
 
-        Framebuffer::State framebufferState = {
-            .images = std::span(attachments),
-            .renderpass = renderPass,
-        };
-        m_framebuffers.emplace_back(framebufferState);
-    }
+    m_framebuffers = PerFrameFramebuffer(Framebuffer::PerFrameState{
+        .images = attachments,
+        .renderpass = renderPass,
+    });
 }
 
 void Gui::resize(uint32_t width, uint32_t height)
 {
-    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
-    {
-        m_framebuffers[i].freeResources();
-    }
-    m_framebuffers.clear();
-    m_swapchainImages.clear();
+    m_framebuffers.destroy();
     createFrameBuffers(m_renderPass);
 }
 
@@ -174,10 +163,7 @@ Gui::Gui()
 Gui::~Gui()
 {
     Renderer &renderer = Renderer::Get();
-    for (Framebuffer framebuffer : m_framebuffers)
-    {
-        framebuffer.freeResources();
-    }
+    m_framebuffers.destroy();
     vkDestroyRenderPass(renderer.getDevice(), m_renderPass, nullptr);
     ImGui_ImplVulkan_Shutdown();
     ImGui::DestroyContext();
@@ -202,11 +188,11 @@ void Gui::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     VkRect2D renderArea = {};
-    renderArea.extent = {m_swapchainImages[0]->m_width, m_swapchainImages[0]->m_height};
+    renderArea.extent = renderer.getDrawAreaExtent();
     renderPassBeginInfo.renderArea = renderArea;
     renderPassBeginInfo.renderPass = m_renderPass;
 
-    VkExtent2D windowExtent = renderer.getWindowExtent();
+    VkExtent2D windowExtent = renderer.getDrawAreaExtent();
     VkViewport viewport;
     viewport.height = static_cast<float>(windowExtent.height);
     viewport.width = static_cast<float>(windowExtent.width);
@@ -219,7 +205,7 @@ void Gui::draw(VkCommandBuffer commandBuffer, uint32_t frameIndex)
     scissor.offset = {0, 0};
     scissor.extent = {(uint32_t)windowExtent.width, (uint32_t)windowExtent.height};
 
-    renderPassBeginInfo.framebuffer = m_framebuffers[frameIndex].m_frameBuffer;
+    renderPassBeginInfo.framebuffer = m_framebuffers.curFrameData()->m_frameBuffer;
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
     VkSubpassContents subpassContents = {};
