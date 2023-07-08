@@ -166,6 +166,7 @@ Gui::~Gui()
     m_framebuffers.destroy();
     vkDestroyRenderPass(renderer.getDevice(), m_renderPass, nullptr);
     ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
 

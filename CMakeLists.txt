@@ -110,6 +110,7 @@ add_library(imgui
   imgui/imgui.cpp
 )
 target_include_directories(imgui PUBLIC imgui)
+target_link_libraries(imgui Vulkan::Vulkan)
 
 add_executable(Pacem
     src/Main.cpp

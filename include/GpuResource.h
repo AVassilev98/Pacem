@@ -8,6 +8,7 @@
 #include "vulkan/vulkan.h"
 
 #include "ResourcePool.h"
+#include <array>
 
 template <class Derived>
 struct BaseBuffer

@@ -383,7 +383,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
     frameCount++;
 
     PushConstants pushConstants = {};
-    pushConstants.M = model;
+    pushConstants.M = glm::mat4(1);
     pushConstants.V = view;
     pushConstants.P = projection;
 
@@ -394,7 +394,7 @@ void EditorRenderPass::draw(VkCommandBuffer commandBuffer, uint32_t frameIdx)
     renderPassBeginInfo.renderPass = m_pipeline.m_renderPass;
 
     VkClearValue clearValues[3];
-    clearValues[0].color = {0.f, 0.f, 0.f, 0.f};
+    clearValues[0].color = {0.f, 0.f, 0.f, 1.f};
     clearValues[1].depthStencil = {1.f, 0};
 
     renderPassBeginInfo.clearValueCount = 2;

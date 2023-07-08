@@ -392,8 +392,8 @@ const DeviceInfo Renderer::createDevice()
     deviceCreateInfo.queueCreateInfoCount = queueCreateInfos.size();
     deviceCreateInfo.pEnabledFeatures = &m_physDeviceInfo.deviceFeatures;
 
-    constexpr auto requiredExtensions = std::to_array({VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
-                                                       VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, VK_KHR_MAINTENANCE_2_EXTENSION_NAME});
+    constexpr std::array requiredExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
+                                                       VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, VK_KHR_MAINTENANCE_2_EXTENSION_NAME};
     deviceCreateInfo.enabledExtensionCount = requiredExtensions.size();
     deviceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
     DeviceInfo deviceInfo = {};
@@ -1169,7 +1169,7 @@ Handle<Image> Renderer::uploadTextureToGpu(const std::span<uint8_t> &buf, uint32
 {
     auto bufQueueFamilies = std::to_array({QueueFamily::Transfer});
     Handle<Buffer> stagingBufferHandle = create({
-        .size = buf.size(),
+        .size = static_cast<uint32_t>(buf.size()),
         .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .families = bufQueueFamilies,
         .vmaFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -1243,5 +1243,6 @@ Renderer::~Renderer()
     vmaDestroyAllocator(m_vmaAllocator);
     vkDestroyDevice(m_deviceInfo.device, nullptr);
     vkDestroyInstance(m_instance, nullptr);
+    glfwDestroyWindow(m_windowInfo.window);
     glfwTerminate();
 }
