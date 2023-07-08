@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Shader.h"
 #include "VkInit.h"
+#include "VkTypes.h"
 #include <vulkan/vulkan_core.h>
 
 VkPipelineShaderStageCreateInfo VkInit::CreateVkPipelineShaderStageCreateInfo(const Shader &shader)
@@ -27,7 +28,7 @@ VkDescriptorSetLayout VkInit::CreateEmptyVkDescriptorSetLayout()
     return descriptorSetLayout;
 }
 
-VkDescriptorSetLayout VkInit::CreateVkDescriptorSetLayout(const std::span<VkDescriptorSetLayoutBinding> &bindings)
+VkDescriptorSetLayout VkInit::CreateVkDescriptorSetLayout(const std::span<const VkDescriptorSetLayoutBinding> &bindings)
 {
     Renderer &renderer = Renderer::Get();
 
@@ -50,68 +51,19 @@ VkDescriptorSetLayoutBinding VkInit::CreateVkDescriptorSetLayoutBinding(VkDescri
     };
 }
 
-VkPipelineLayout VkInit::CreateVkPipelineLayout(const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &dsls,
-                                                std::span<VkPushConstantRange> pushRanges)
+VkPipelineLayout VkInit::CreateVkPipelineLayout(const VkPipelineLayoutCreateInfo &pipelineLayoutCreateInfo)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    pipelineLayoutCreateInfo.setLayoutCount = dsls.size();
-    pipelineLayoutCreateInfo.pSetLayouts = dsls.data();
-    pipelineLayoutCreateInfo.pushConstantRangeCount = pushRanges.size();
-    pipelineLayoutCreateInfo.pPushConstantRanges = pushRanges.data();
-
     VkPipelineLayout pipelineLayout;
     VK_LOG_ERR(vkCreatePipelineLayout(renderer.getDevice(), &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
     return pipelineLayout;
 }
 
-VkPipeline VkInit::CreateVkGraphicsPipeline(const GraphicsPipelineState &state)
+VkPipeline VkInit::CreateVkGraphicsPipeline(const VkGraphicsPipelineCreateInfo &graphicsPipelineCreateInfo)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkPipelineVertexInputStateCreateInfo vertexInputStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = static_cast<uint32_t>(state.vertexInputBindingDescription.size()),
-        .pVertexBindingDescriptions = state.vertexInputBindingDescription.data(),
-        .vertexAttributeDescriptionCount = static_cast<uint32_t>(state.vertexInputAttributeDescription.size()),
-        .pVertexAttributeDescriptions = state.vertexInputAttributeDescription.data(),
-    };
-
-    VkPipelineViewportStateCreateInfo viewportStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = static_cast<uint32_t>(state.viewports.size()),
-        .pViewports = state.viewports.data(),
-        .scissorCount = static_cast<uint32_t>(state.scissors.size()),
-        .pScissors = state.scissors.data(),
-    };
-
-    VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = static_cast<uint32_t>(state.dynamicStates.size()),
-        .pDynamicStates = state.dynamicStates.data(),
-    };
-
-    VkGraphicsPipelineCreateInfo pipelineCreateInfo = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipelineCreateInfo.stageCount = state.shaderInfo.size();
-    pipelineCreateInfo.pStages = state.shaderInfo.data();
-    pipelineCreateInfo.pVertexInputState = &vertexInputStateInfo;
-    pipelineCreateInfo.pInputAssemblyState = &state.inputAssemblyStateInfo;
-    pipelineCreateInfo.pTessellationState = &state.tesselationStateInfo;
-    pipelineCreateInfo.pViewportState = &viewportStateInfo;
-    pipelineCreateInfo.pRasterizationState = &state.rasterStateInfo;
-    pipelineCreateInfo.pMultisampleState = &state.msaaStateInfo;
-    pipelineCreateInfo.pDepthStencilState = &state.depthStencilInfo;
-    pipelineCreateInfo.pColorBlendState = &state.colorBlendStateInfo;
-    pipelineCreateInfo.pDynamicState = &dynamicStateInfo;
-    pipelineCreateInfo.layout = state.layout;
-    pipelineCreateInfo.renderPass = state.renderPass;
-    pipelineCreateInfo.subpass = 0;
-    pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-    pipelineCreateInfo.basePipelineHandle = 0;
-
     VkPipeline pipeline = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateGraphicsPipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, VK_NULL_HANDLE, &pipeline));
+    VK_LOG_ERR(vkCreateGraphicsPipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, VK_NULL_HANDLE, &pipeline));
     return pipeline;
 }
 
@@ -138,72 +90,49 @@ VkRenderPass VkInit::CreateVkRenderPass(const RenderPassState &state)
     Renderer &renderer = Renderer::Get();
 
     auto fillVkAttachmentDescriptions
-        = [](std::vector<VkAttachmentDescription> &vkAttachments, const std::span<RenderPassState::Attachment> &vkinitAttachments)
+        = [](std::vector<VkAttachmentDescription> &vkAttachments, const std::span<const AttachmentDescription> &vkinitAttachments)
     {
-        for (const RenderPassState::Attachment &attachment : vkinitAttachments)
+        for (const AttachmentDescription &attachment : vkinitAttachments)
         {
-            vkAttachments.push_back(VkAttachmentDescription{
-                .format = attachment.format,
-                .samples = attachment.samples,
-                .loadOp = attachment.loadOp,
-                .storeOp = attachment.storeOp,
-                .stencilLoadOp = attachment.stencilLoadOp,
-                .stencilStoreOp = attachment.stencilStoreOp,
-                .initialLayout = attachment.initialLayout,
-                .finalLayout = attachment.finalLayout,
-            });
+            vkAttachments.emplace_back(toVkAttachmentDescription(attachment));
         }
     };
 
     auto createVkAttachmentReferences
-        = [](const std::span<RenderPassState::Attachment> &vkinitAttachments) -> std::vector<VkAttachmentReference>
+        = [](const std::span<const AttachmentDescription> &vkinitAttachments) -> std::vector<VkAttachmentReference>
     {
         std::vector<VkAttachmentReference> out;
-        for (const RenderPassState::Attachment &attachment : vkinitAttachments)
+        for (const AttachmentDescription &attachment : vkinitAttachments)
         {
-            out.push_back(VkAttachmentReference{
-                .attachment = attachment.attachment,
-                .layout = attachment.referenceLayout,
-            });
+            out.emplace_back(toVkAttachmentReference(attachment));
         }
         return out;
     };
 
     auto createVkSubpassDependencies
-        = [](const std::span<RenderPassState::SubpassDependency> &vksubpassDependencies) -> std::vector<VkSubpassDependency>
+        = [](const std::span<const SubpassDependency> &vksubpassDependencies) -> std::vector<VkSubpassDependency>
     {
         std::vector<VkSubpassDependency> out;
-        for (const RenderPassState::SubpassDependency &subpassDependency : vksubpassDependencies)
+        for (const SubpassDependency &subpassDependency : vksubpassDependencies)
         {
-            out.push_back(VkSubpassDependency{
-                .srcSubpass = subpassDependency.srcSubpass,
-                .dstSubpass = subpassDependency.dstSubpass,
-                .srcStageMask = subpassDependency.srcStageMask,
-                .dstStageMask = subpassDependency.dstStageMask,
-                .srcAccessMask = subpassDependency.srcAccessMask,
-                .dstAccessMask = subpassDependency.dstAccessMask,
-            });
+            out.emplace_back(toVkSubpassDependency(subpassDependency));
         }
         return out;
     };
 
     std::vector<VkAttachmentDescription> attachments;
     uint32_t totalAttachments
-        = state.colorAttachments.size() + state.inputAttachments.size() + (state.depthAttachment ? 1 : 0) + state.resolveAttachments.size();
+        = state.colorAttachments.size() + state.inputAttachments.size() + state.depthAttachment.size() + state.resolveAttachments.size();
     attachments.reserve(totalAttachments);
 
     fillVkAttachmentDescriptions(attachments, state.colorAttachments);
     fillVkAttachmentDescriptions(attachments, state.inputAttachments);
-    if (state.depthAttachment)
-    {
-        fillVkAttachmentDescriptions(attachments, std::span(state.depthAttachment, 1));
-    }
+    fillVkAttachmentDescriptions(attachments, state.depthAttachment);
     fillVkAttachmentDescriptions(attachments, state.resolveAttachments);
 
     std::vector<VkAttachmentReference> colorAttachmentReference = createVkAttachmentReferences(state.colorAttachments);
     std::vector<VkAttachmentReference> inputAttachmentReference = createVkAttachmentReferences(state.inputAttachments);
-    std::vector<VkAttachmentReference> depthAttachmentReference = createVkAttachmentReferences(
-        state.depthAttachment ? std::span(state.depthAttachment, 1) : std::span<RenderPassState::Attachment, 0>());
+    std::vector<VkAttachmentReference> depthAttachmentReference = createVkAttachmentReferences(state.depthAttachment);
     std::vector<VkAttachmentReference> resolveAttachmentReference = createVkAttachmentReferences(state.resolveAttachments);
 
     std::vector<VkSubpassDependency> subpassDependencies = createVkSubpassDependencies(state.dependencies);
@@ -212,7 +141,7 @@ VkRenderPass VkInit::CreateVkRenderPass(const RenderPassState &state)
     subpassDescription.pipelineBindPoint = state.bindpoint;
     subpassDescription.colorAttachmentCount = colorAttachmentReference.size();
     subpassDescription.inputAttachmentCount = inputAttachmentReference.size();
-    subpassDescription.pDepthStencilAttachment = state.depthAttachment ? depthAttachmentReference.data() : VK_NULL_HANDLE;
+    subpassDescription.pDepthStencilAttachment = depthAttachmentReference.size() ? &depthAttachmentReference[0] : VK_NULL_HANDLE;
     subpassDescription.pColorAttachments = colorAttachmentReference.data();
     subpassDescription.pInputAttachments = inputAttachmentReference.data();
     subpassDescription.pResolveAttachments = resolveAttachmentReference.data();

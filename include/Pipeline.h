@@ -2,35 +2,46 @@
 
 #include "Common.h"
 #include "Shader.h"
+#include "VkInit.h"
+#include "VkTypes.h"
 #include <optional>
 #include <span>
 #include <vulkan/vulkan_core.h>
+
+struct PipelineLayout
+{
+    friend class GraphicsPipeline;
+    friend class ComputePipeline;
+
+    PipelineLayoutState m_pipelineState;
+    VkPipelineLayout m_pipelineLayout;
+
+  private:
+    PipelineLayout(const PipelineLayoutState &&state);
+};
 
 class GraphicsPipeline
 {
   public:
     struct State
     {
-        struct Dynamic
-        {
-            std::optional<VkRect2D> scissor = {};
-            std::optional<VkViewport> viewport = {};
-        };
-
-        VkBool32 enableDepthTest = VK_TRUE;
-        VkBool32 enableDepthWrite = VK_TRUE;
-        const std::span<Shader *> &shaders;
-        const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &layouts;
+        Shader *VS = nullptr;
+        Shader *TS = nullptr;
+        Shader *GS = nullptr;
+        Shader *FS = nullptr;
+        VertexInputState vertexInputState;
+        InputAssemblyState inputAssemblyState = {};
+        TessellationState tessellationState = {};
+        ViewportState viewportState = {};
+        RasterizationState rasterizationState = {};
+        MultisampleState multisampleState = {};
+        DepthStencilState depthStencilState = {};
+        ColorBlendState colorBlendState = {};
+        DynamicState dynamicState = {};
+        PipelineLayoutState pipelineLayout;
         const VkRenderPass &renderPass;
-        std::span<VkPushConstantRange> pushConstantRanges;
-        VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        const std::span<VkVertexInputBindingDescription> &vertexBindingDescription;
-        const std::span<VkVertexInputAttributeDescription> &vertexAttributeDescription;
-        const std::span<VkPipelineColorBlendAttachmentState> &colorBlendAttachmentStates;
-        VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
-        Dynamic dynamicState = {};
     };
-    GraphicsPipeline(const State &state);
+    GraphicsPipeline(const State &&state);
     GraphicsPipeline() = default;
 
   public:
@@ -41,7 +52,6 @@ class GraphicsPipeline
     void freeResources();
 
   private:
-    State::Dynamic m_dynamicState;
 };
 
 class ComputePipeline
@@ -49,11 +59,10 @@ class ComputePipeline
   public:
     struct State
     {
-        std::span<VkPushConstantRange> pushConstantRanges;
-        const std::span<VkDescriptorSetLayout, DSL_FREQ_COUNT> &layouts;
-        const Shader &shader;
+        PipelineLayoutState pipelineLayoutState;
+        const Shader &CS;
     };
-    ComputePipeline(const State &state);
+    ComputePipeline(const State &&state);
     ComputePipeline() = default;
 
   public:

@@ -70,118 +70,77 @@ DeferredRenderPass::DeferredRenderPass(const std::span<Shader *> &shaders, const
     : m_cameraRef(camera)
 {
     Renderer &renderer = Renderer::Get();
-
-    auto perMaterialDescriptorSetDesc = std::to_array({
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2),
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3),
+    VkRenderPass renderPass = VkInit::CreateVkRenderPass({
+        .colorAttachments{{
+            {
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .format = VK_FORMAT_B8G8R8A8_UNORM,
+                .attachment = 1,
+                .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+            {
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .format = VK_FORMAT_R16G16_SFLOAT,
+                .attachment = 0,
+                .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+        }},
+        .depthAttachment{{
+            {
+                .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .format = VK_FORMAT_D32_SFLOAT,
+                .attachment = 2,
+                .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
+        }},
     });
 
-    std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> descriptorSetLayouts;
-    descriptorSetLayouts[DSL_FREQ_PER_FRAME] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    descriptorSetLayouts[DSL_FREQ_PER_PASS] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    descriptorSetLayouts[DSL_FREQ_PER_MAT] = VkInit::CreateVkDescriptorSetLayout(perMaterialDescriptorSetDesc);
-    descriptorSetLayouts[DSL_FREQ_PER_MESH] = VkInit::CreateEmptyVkDescriptorSetLayout();
-
-    VkInit::RenderPassState::Attachment normals = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .format = VK_FORMAT_R16G16_SFLOAT,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 0,
-        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    VkInit::RenderPassState::Attachment diffuseColor = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 1,
-        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    VkInit::RenderPassState::Attachment depth = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .format = VK_FORMAT_D32_SFLOAT,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 2,
-        .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-    auto colorAttachments = std::to_array({diffuseColor, normals});
-
-    VkInit::RenderPassState renderPassState = {
-        .colorAttachments = colorAttachments,
-        .depthAttachment = &depth,
-    };
-    VkRenderPass renderPass = VkInit::CreateVkRenderPass(renderPassState);
-
-    auto vertexBindingDescriptions = std::to_array({
-        VkVertexInputBindingDescription{
-            .binding = 0,
-            .stride = sizeof(Vertex),
-            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    m_pipeline = GraphicsPipeline({
+        .VS = shaders[0],
+        .FS = shaders[1],
+        .vertexInputState{
+            .vertexBindingDescs{{
+                {.binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
+            }},
+            .vertexAttributeDescs{{
+                {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
+                {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
+                {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
+                {.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, textureCoordinate)},
+            }},
         },
-    });
-
-    auto vertexAttributeDescriptions = std::to_array({
-        VkVertexInputAttributeDescription{
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = offsetof(Vertex, position),
+        .colorBlendState = {
+            .colorBlendAttachmentStates{{
+                {},
+                {},
+            }},
         },
-        VkVertexInputAttributeDescription{
-            .location = 1,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = offsetof(Vertex, normal),
+        .pipelineLayout{
+            .descSetLayouts{{
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateVkDescriptorSetLayout({{
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2),
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3),
+                }}),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+            }},
+            .pushConstantRanges{{{
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .offset = 0,
+                .size = sizeof(PushConstants),
+            }}},
         },
-        VkVertexInputAttributeDescription{
-            .location = 2,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = offsetof(Vertex, color),
-        },
-        VkVertexInputAttributeDescription{
-            .location = 3,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(Vertex, textureCoordinate),
-        },
-    });
-
-    VkPushConstantRange range;
-    range.offset = 0;
-    range.size = sizeof(PushConstants);
-    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
-    colorBlendAttachmentState.blendEnable = VK_FALSE;
-    colorBlendAttachmentState.colorWriteMask
-        = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-    auto colorBlendStates = std::to_array({
-        colorBlendAttachmentState,
-        colorBlendAttachmentState,
-    });
-
-    GraphicsPipeline::State pipelineState = {
-        .shaders = shaders,
-        .layouts = descriptorSetLayouts,
         .renderPass = renderPass,
-        .pushConstantRanges = std::span(&range, 1),
-        .vertexBindingDescription = vertexBindingDescriptions,
-        .vertexAttributeDescription = vertexAttributeDescriptions,
-        .colorBlendAttachmentStates = colorBlendStates,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    };
-    m_pipeline = std::move(GraphicsPipeline(pipelineState));
+    });
 }
 
 void DeferredRenderPass::updateGBuffer()
@@ -303,68 +262,57 @@ void EditorRenderPass::createFrameBuffers(VkRenderPass renderPass)
 EditorRenderPass::EditorRenderPass(const std::span<Shader *> &shaders, const UserControlledCamera &camera)
     : m_cameraRef(camera)
 {
-    std::array<VkDescriptorSetLayout, DSL_FREQ_COUNT> descriptorSetLayouts;
-    descriptorSetLayouts[DSL_FREQ_PER_FRAME] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    descriptorSetLayouts[DSL_FREQ_PER_PASS] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    descriptorSetLayouts[DSL_FREQ_PER_MAT] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    descriptorSetLayouts[DSL_FREQ_PER_MESH] = VkInit::CreateEmptyVkDescriptorSetLayout();
 
-    VkInit::RenderPassState::Attachment color = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 0,
-        .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-    VkInit::RenderPassState::Attachment depth = {
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .format = VK_FORMAT_D32_SFLOAT,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .attachment = 1,
-        .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-    VkInit::RenderPassState renderPassState = {
-        .colorAttachments = std::span(&color, 1),
-        .depthAttachment = &depth,
-    };
-    VkRenderPass renderPass = VkInit::CreateVkRenderPass(renderPassState);
-
-    VkPushConstantRange range;
-    range.offset = 0;
-    range.size = sizeof(PushConstants);
-    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = VK_BLEND_OP_ADD,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-    };
+    VkRenderPass renderPass = VkInit::CreateVkRenderPass(RenderPassState{
+        .colorAttachments{{
+            {
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .format = VK_FORMAT_B8G8R8A8_UNORM,
+                .attachment = 0,
+                .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+        }},
+        .depthAttachment{{
+            {
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .format = VK_FORMAT_D32_SFLOAT,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .attachment = 1,
+                .referenceLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
+        }},
+    });
 
     createFrameBuffers(renderPass);
 
-    GraphicsPipeline::State pipelineState = {
-        .enableDepthTest = VK_TRUE,
-        .shaders = shaders,
-        .layouts = descriptorSetLayouts,
+    m_pipeline = GraphicsPipeline({
+        .VS = shaders[0],
+        .FS = shaders[1],
+        .colorBlendState = {
+            .colorBlendAttachmentStates {{
+                { .blendEnable = VK_TRUE },
+            }}
+        },
+        .pipelineLayout = {
+            .descSetLayouts {{
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+            }},
+            .pushConstantRanges {{
+                { .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    .offset = 0,
+                    .size = sizeof(PushConstants)
+                }
+            }},
+        },
         .renderPass = renderPass,
-        .pushConstantRanges = std::span(&range, 1),
-        .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-        .vertexBindingDescription = std::span<VkVertexInputBindingDescription>(),
-        .vertexAttributeDescription = std::span<VkVertexInputAttributeDescription>(),
-        .colorBlendAttachmentStates = std::span(&colorBlendAttachmentState, 1),
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    };
-    m_pipeline = std::move(GraphicsPipeline(pipelineState));
+    });
 }
 
 EditorRenderPass::~EditorRenderPass()
@@ -536,7 +484,8 @@ void ShadingRenderPass::createDescriptorSets()
     uint32_t maxFramesInFlight = renderer.numFramesInFlight();
     for (uint32_t i = 0; i < maxFramesInFlight; i++)
     {
-        m_lightingDescriptorSets[i][DSL_FREQ_PER_PASS] = renderer.allocateDescriptorSet(m_lightingDescriptorSetLayouts[DSL_FREQ_PER_PASS]);
+        m_lightingDescriptorSets[i][DSL_FREQ_PER_PASS]
+            = renderer.allocateDescriptorSet(m_shadingPipeline.m_descriptorSetLayouts[DSL_FREQ_PER_PASS]);
     }
 }
 
@@ -548,27 +497,28 @@ ShadingRenderPass::ShadingRenderPass(const Shader &lightCullShader, const Shader
     uint32_t descriptorCount;
     VkShaderStageFlags stageFlags;
     const VkSampler *pImmutableSamplers;
-    auto lightingDescriptorSetBindings = std::to_array<VkDescriptorSetLayoutBinding>({
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1),
-        VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2),
-    });
-
-    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_FRAME] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_PASS] = VkInit::CreateVkDescriptorSetLayout(lightingDescriptorSetBindings);
-    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_MAT] = VkInit::CreateEmptyVkDescriptorSetLayout();
-    m_lightingDescriptorSetLayouts[DSL_FREQ_PER_MESH] = VkInit::CreateEmptyVkDescriptorSetLayout();
-
-    VkPushConstantRange range;
-    range.offset = 0;
-    range.size = sizeof(PushConstants);
-    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     // ComputePipeline::State lightCullPipelineState = {.layout = m_lightCullPipelineLayout, .shader = lightCullShader};
-    ComputePipeline::State shadingPipelineState = {.layouts = m_lightingDescriptorSetLayouts, .shader = lightingShader};
 
     // m_lightCullPipeline = ComputePipeline(lightCullPipelineState);
-    m_shadingPipeline = ComputePipeline(shadingPipelineState);
+    m_shadingPipeline = ComputePipeline({
+        .pipelineLayoutState{
+            .descSetLayouts = {{
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateVkDescriptorSetLayout({{
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1),
+                    VkInit::CreateVkDescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2),
+                }}),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+                VkInit::CreateEmptyVkDescriptorSetLayout(),
+            }},
+            .pushConstantRanges = {{
+                {.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(PushConstants)},
+            }},
+        },
+        .CS = lightingShader,
+    });
 
     // createImages();
     createDescriptorSets();

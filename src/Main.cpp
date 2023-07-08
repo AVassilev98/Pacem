@@ -23,6 +23,7 @@
 #include "RenderPass.h"
 #include "Renderer.h"
 #include "Shader.h"
+#include "Singleton.h"
 #include "Types.h"
 #include "VkInit.h"
 
@@ -36,7 +37,6 @@ int main()
 
     Renderer &renderer = Renderer::Get();
     renderer.createSwapchainImages();
-    Gui &gui = Gui::Get();
 
     Shader lineVertShader(CONCAT(SHADER_PATH, "editorGrid.vert.spv"), Shader::Stage::Vertex);
     Shader lineFragShader(CONCAT(SHADER_PATH, "editorGrid.frag.spv"), Shader::Stage::Fragment);
@@ -55,6 +55,8 @@ int main()
     EditorRenderPass editorRenderPass(lineShaders, mainCamera);
     DeferredRenderPass mainRenderPass(mainShaders, mainCamera);
     ShadingRenderPass shadingRenderPass(lightCullShader, lightShadeShader, mainCamera);
+    Gui &gui = Gui::Get();
+
     Mesh suzanneMesh(CONCAT(ASSET_PATH, "DamagedHelmet.glb"), mainRenderPass.m_pipeline);
 
     renderer.addRenderPass(&editorRenderPass);

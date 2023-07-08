@@ -2,6 +2,7 @@
 #include "Pipeline.h"
 #include "Renderer.h"
 #include "VkInit.h"
+#include "VkTypes.h"
 #include <array>
 #include <assert.h>
 #include <span>
@@ -9,83 +10,79 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-GraphicsPipeline::GraphicsPipeline(const State &state)
+PipelineLayout::PipelineLayout(const PipelineLayoutState &&state)
+    : m_pipelineState(state)
+{
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = toVkPipelineLayoutCreateInfo(std::move(state));
+    VK_LOG_ERR(vkCreatePipelineLayout(Renderer::Get().getDevice(), &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout));
+}
+
+GraphicsPipeline::GraphicsPipeline(const State &&state)
     : m_renderPass(state.renderPass)
 {
-    constexpr unsigned maxShadersInPipeline = 5;
-    std::array<VkPipelineShaderStageCreateInfo, maxShadersInPipeline> shaderStages;
-    unsigned numShaderStages = 0;
+    constexpr uint32_t maxShadersInPipeline = 4;
+    constexpr auto requiredDynamicStates = std::to_array<VkDynamicState>({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+    std::array<VkPipelineShaderStageCreateInfo, maxShadersInPipeline> shaderStages = {};
+    uint32_t numShaderStages = 0;
 
-    for (const Shader *shader : state.shaders)
-    {
-        assert(shader && "Shader should not be null");
-        shaderStages[numShaderStages] = VkInit::CreateVkPipelineShaderStageCreateInfo(*shader);
-        numShaderStages++;
-    }
-
+    // clang-format off
+    if(state.VS) shaderStages[numShaderStages++] = VkInit::CreateVkPipelineShaderStageCreateInfo(*state.VS);
+    if(state.TS) shaderStages[numShaderStages++] = VkInit::CreateVkPipelineShaderStageCreateInfo(*state.TS);
+    if(state.GS) shaderStages[numShaderStages++] = VkInit::CreateVkPipelineShaderStageCreateInfo(*state.GS);
+    if(state.FS) shaderStages[numShaderStages++] = VkInit::CreateVkPipelineShaderStageCreateInfo(*state.FS);
+    // clang-format on
     for (uint32_t i = 0; i < DSL_FREQ_COUNT; i++)
     {
-        m_descriptorSetLayouts[i] = state.layouts[i];
+        m_descriptorSetLayouts[i] = state.pipelineLayout.descSetLayouts[i];
     }
-    m_pipelineLayout = VkInit::CreateVkPipelineLayout(m_descriptorSetLayouts, state.pushConstantRanges);
+    m_pipelineLayout = VkInit::CreateVkPipelineLayout(toVkPipelineLayoutCreateInfo(std::move(state.pipelineLayout)));
 
-    VkPipelineTessellationStateCreateInfo tessellationStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-        .patchControlPoints = 0,
-    };
+    VkPipelineVertexInputStateCreateInfo vertexInputState = toVkPipelineVertexInputStateCreateInfo(state.vertexInputState);
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = toVkPipelineInputAssemblyStateCreateInfo(state.inputAssemblyState);
+    VkPipelineTessellationStateCreateInfo tessellationState = toVkPipelineTessellationStateCreateInfo(state.tessellationState);
+    VkPipelineViewportStateCreateInfo viewportState = toVkPipelineViewportStateCreateInfo(state.viewportState);
+    VkPipelineRasterizationStateCreateInfo rasterizationState = toVkPipelineRasterizationStateCreateInfo(state.rasterizationState);
+    VkPipelineMultisampleStateCreateInfo multiSampleState = toVkPipelineMultisampleStateCreateInfo(state.multisampleState);
+    VkPipelineDepthStencilStateCreateInfo depthStencilState = toVkPipelineDepthStencilStateCreateInfo(state.depthStencilState);
+    VkPipelineColorBlendStateCreateInfo colorBlendState = toVkPipelineColorBlendStateCreateInfo(state.colorBlendState);
+    VkPipelineDynamicStateCreateInfo dynamicState = toVkPipelineDynamicStateCreateInfo(state.dynamicState);
 
-    VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = VK_FALSE,
-        .logicOp = VK_LOGIC_OP_COPY,
-        .attachmentCount = static_cast<uint32_t>(state.colorBlendAttachmentStates.size()),
-        .pAttachments = state.colorBlendAttachmentStates.data(),
-    };
+    // create a list with both required and passed in dynamic states appended
+    std::vector<VkDynamicState> dynamicStates(dynamicState.dynamicStateCount + requiredDynamicStates.size());
+    for (uint32_t i = 0; i < dynamicState.dynamicStateCount; i++)
+    {
+        dynamicStates[i] = dynamicState.pDynamicStates[i];
+    }
+    for (uint32_t i = dynamicState.dynamicStateCount; i < dynamicState.dynamicStateCount + requiredDynamicStates.size(); i++)
+    {
+        dynamicStates[i] = requiredDynamicStates[i];
+    }
+    dynamicState.dynamicStateCount = dynamicStates.size();
+    dynamicState.pDynamicStates = dynamicStates.data();
 
-    VkPipelineMultisampleStateCreateInfo msaaStateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = state.sampleCount,
-        .minSampleShading = 1.0f,
-    };
-
-    VkExtent2D windowExtent = Renderer::Get().getDrawAreaExtent();
-    VkRect2D scissor = state.dynamicState.scissor.has_value() ? state.dynamicState.scissor.value()
-                                                              : VkRect2D{
-                                                                  .offset = {},
-                                                                  .extent = windowExtent,
-                                                              };
-    VkViewport viewport = state.dynamicState.viewport.has_value() ? state.dynamicState.viewport.value()
-                                                                  : VkViewport{
-                                                                      .x = 0,
-                                                                      .y = 0,
-                                                                      .width = static_cast<float>(windowExtent.width),
-                                                                      .height = static_cast<float>(windowExtent.height),
-                                                                      .minDepth = 0.0f,
-                                                                      .maxDepth = 1.0f,
-                                                                  };
-
-    auto dynamicStates = std::to_array({
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-    });
-
-    VkInit::GraphicsPipelineState pipelineState = {
+    VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stageCount = numShaderStages,
+        .pStages = shaderStages.data(),
+        .pVertexInputState = &vertexInputState,
+        .pInputAssemblyState = &inputAssemblyState,
+        .pTessellationState = &tessellationState,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizationState,
+        .pMultisampleState = &multiSampleState,
+        .pDepthStencilState = &depthStencilState,
+        .pColorBlendState = &colorBlendState,
+        .pDynamicState = &dynamicState,
         .layout = m_pipelineLayout,
-        .renderPass = state.renderPass,
-        .shaderInfo = std::span(shaderStages.data(), numShaderStages),
-        .vertexInputBindingDescription = state.vertexBindingDescription,
-        .vertexInputAttributeDescription = state.vertexAttributeDescription,
-        .msaaStateInfo = msaaStateInfo,
-        .colorBlendStateInfo = colorBlendStateInfo,
-        .viewports = std::span(&viewport, 1),
-        .scissors = std::span(&scissor, 1),
-        .dynamicStates = dynamicStates,
+        .renderPass = m_renderPass,
+        .subpass = 0,
+        .basePipelineHandle = 0,
+        .basePipelineIndex = 0,
     };
-    pipelineState.depthStencilInfo.depthTestEnable = state.enableDepthTest;
-    pipelineState.depthStencilInfo.depthWriteEnable = state.enableDepthWrite;
 
-    m_pipeline = VkInit::CreateVkGraphicsPipeline(pipelineState);
-    m_dynamicState = state.dynamicState;
+    m_pipeline = VkInit::CreateVkGraphicsPipeline(graphicsPipelineCreateInfo);
 }
 
 void GraphicsPipeline::freeResources()
@@ -101,15 +98,12 @@ void GraphicsPipeline::freeResources()
     }
 }
 
-ComputePipeline::ComputePipeline(const State &state)
+ComputePipeline::ComputePipeline(const State &&state)
 {
-    for (uint32_t i = 0; i < DSL_FREQ_COUNT; i++)
-    {
-        m_descriptorSetLayouts[i] = state.layouts[i];
-    }
-
-    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = VkInit::CreateVkPipelineShaderStageCreateInfo(state.shader);
-    m_pipelineLayout = VkInit::CreateVkPipelineLayout(state.layouts, state.pushConstantRanges);
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = VkInit::CreateVkPipelineShaderStageCreateInfo(state.CS);
+    m_pipelineLayout = VkInit::CreateVkPipelineLayout(toVkPipelineLayoutCreateInfo(state.pipelineLayoutState));
+    const std::span<const VkDescriptorSetLayout, DSL_FREQ_COUNT> &descriptorSets = state.pipelineLayoutState.descSetLayouts;
+    std::copy(descriptorSets.begin(), descriptorSets.end(), m_descriptorSetLayouts.begin());
 
     VkInit::ComputePipelineState computePipelineState = {
         .shader = shaderStageCreateInfo,
