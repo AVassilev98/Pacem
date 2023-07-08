@@ -17,22 +17,19 @@ Buffer::Buffer(const State &&state)
     {
         queueFamilyIndices[i] = renderer.getQueueFamilyIdx(state.families[i]);
     }
-
-    VmaAllocationState allocationState = {
-        .allocation = m_allocation,
-        .allocationInfo = m_allocationInfo,
-        .usage = state.vmaUsage,
-        .flags = state.vmaFlags,
-    };
-
-    VkInit::BufferState bufferState = {
+    VmaBuffer output = VkInit::CreateVkBuffer({
         .size = state.size,
         .usage = state.usage,
-        .queueFamilyIndices = std::span(queueFamilyIndices.data(), state.families.size()),
-        .allocation = allocationState,
-    };
+        .queueFamilyIndices = queueFamilyIndices,
+        .allocation{
+            .flags = state.vmaFlags,
+            .usage = state.vmaUsage,
+        },
+    });
 
-    m_buffer = VkInit::CreateVkBuffer(bufferState);
+    m_buffer = output.buffer;
+    m_allocation = output.allocation;
+    m_allocationInfo = output.allocationInfo;
 }
 
 void Buffer::destroy()
@@ -57,15 +54,7 @@ Image::Image(const State &&state)
         {
             queueFamilyIndices[i] = renderer.getQueueFamilyIdx(state.families[i]);
         }
-
-        VmaAllocationState allocationState = {
-            .allocation = m_allocation,
-            .allocationInfo = m_allocationInfo,
-            .usage = state.vmaUsage,
-            .flags = state.vmaFlags,
-        };
-
-        VkInit::ImageState imageState = {
+        VmaImage image = VkInit::CreateVkImage({
             .format = state.format,
             .width = state.width,
             .height = state.height,
@@ -73,9 +62,15 @@ Image::Image(const State &&state)
             .usage = state.usage,
             .queueFamilyIndices = queueFamilyIndices,
             .initialLayout = state.initialLayout,
-            .allocation = allocationState,
-        };
-        m_image = VkInit::CreateVkImage(imageState);
+            .allocation{
+                .flags = state.vmaFlags,
+                .usage = state.vmaUsage,
+            },
+        });
+
+        m_image = image.image;
+        m_allocation = image.allocation;
+        m_allocationInfo = image.allocationInfo;
     }
     else
     {
@@ -99,13 +94,14 @@ void Image::addImageViewFormat(VkFormat format)
         assert(kv.first == format && "Should not add duplicate imageView!");
     }
 #endif
-
-    VkInit::ImageViewState imageViewState = {
-        .image = m_image,
-        .format = format,
-        .aspectMask = m_aspectMask,
+    m_imageViews[m_numImageViews++] = {
+        format,
+        VkInit::CreateVkImageView({
+            .image = m_image,
+            .format = format,
+            .aspectMask = m_aspectMask,
+        }),
     };
-    m_imageViews[m_numImageViews++] = {format, VkInit::CreateVkImageView(imageViewState)};
 }
 
 VkImageView Image::getImageViewByFormat(VkFormat format)
@@ -157,14 +153,12 @@ Framebuffer::Framebuffer(const State &&state)
         m_height = std::min(m_height, imageRef.image->m_height);
     }
 
-    VkInit::FramebufferState framebufferState = {
+    m_frameBuffer = VkInit::CreateVkFramebuffer({
         .renderPass = state.renderpass,
         .attachments = attachments,
         .width = m_width,
         .height = m_height,
-    };
-
-    m_frameBuffer = VkInit::CreateVkFramebuffer(framebufferState);
+    });
 }
 
 void Framebuffer::destroy()

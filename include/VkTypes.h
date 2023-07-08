@@ -1,10 +1,12 @@
 #pragma once
 #include "Common.h"
+#include "vma.h"
 #include "vulkan/vulkan.h"
 #include <array>
 #include <cassert>
 #include <span>
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 struct VertexInputBindingDescription
 {
@@ -368,3 +370,177 @@ struct RenderPassState
     const std::span<const SubpassDependency> dependencies;
     VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 };
+
+struct SamplerState
+{
+    VkFilter magFilter = VK_FILTER_LINEAR;
+    VkFilter minFilter = VK_FILTER_LINEAR;
+    VkSamplerMipmapMode mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    VkSamplerAddressMode addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkBool32 anisotropyEnable = VK_FALSE;
+    float maxAnisotropy = 0.0f;
+    VkBool32 compareEnable = VK_FALSE;
+    VkCompareOp compareOp = VK_COMPARE_OP_NEVER;
+    float minLod = 0.0f;
+    float maxLod = VK_LOD_CLAMP_NONE;
+    VkBorderColor borderColor = {VK_BORDER_COLOR_INT_TRANSPARENT_BLACK};
+    VkBool32 unnormalizedCoordinates = VK_FALSE;
+};
+inline VkSamplerCreateInfo toVkSamplerCreateInfo(const SamplerState &toConvert)
+{
+    return VkSamplerCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = toConvert.magFilter,
+        .minFilter = toConvert.minFilter,
+        .mipmapMode = toConvert.mipmapMode,
+        .addressModeU = toConvert.addressModeU,
+        .addressModeV = toConvert.addressModeV,
+        .addressModeW = toConvert.addressModeW,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = toConvert.anisotropyEnable,
+        .maxAnisotropy = toConvert.maxAnisotropy,
+        .compareEnable = toConvert.compareEnable,
+        .compareOp = toConvert.compareOp,
+        .minLod = toConvert.minLod,
+        .maxLod = toConvert.maxLod,
+        .borderColor = toConvert.borderColor,
+        .unnormalizedCoordinates = toConvert.unnormalizedCoordinates,
+    };
+}
+
+struct BufferState
+{
+    const VkDeviceSize size = 0;
+    const VkBufferUsageFlags usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    const VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const std::span<const uint32_t> queueFamilyIndices;
+    const VmaAllocationCreateInfo allocation;
+};
+inline VkBufferCreateInfo toVkBufferCreateInfo(const BufferState &toConvert)
+{
+    assert(toConvert.queueFamilyIndices.size() && "Buffer must belong to a queue!");
+    return VkBufferCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = 0,
+        .flags = 0,
+        .size = toConvert.size,
+        .usage = toConvert.usage,
+        .sharingMode = toConvert.sharingMode,
+        .queueFamilyIndexCount = static_cast<uint32_t>(toConvert.queueFamilyIndices.size()),
+        .pQueueFamilyIndices = toConvert.queueFamilyIndices.data(),
+    };
+}
+struct VmaBuffer
+{
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocationInfo = {};
+    VkBuffer buffer = VK_NULL_HANDLE;
+};
+
+struct ImageState
+{
+    const VkImageType type = VK_IMAGE_TYPE_2D;
+    const VkFormat &format;
+    const uint32_t &width;
+    const uint32_t &height;
+    const uint32_t depth = 1;
+    const uint32_t mipLevels = 1;
+    const uint32_t arrayLayers = 1;
+    const VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
+    const VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    const VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const std::span<const uint32_t> queueFamilyIndices;
+    const VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    const VmaAllocationCreateInfo allocation;
+};
+inline VkImageCreateInfo toVkImageCreateInfo(const ImageState &toConvert)
+{
+    assert(toConvert.queueFamilyIndices.size() && "Image must belong to a queue!");
+    return VkImageCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .imageType = toConvert.type,
+        .format = toConvert.format,
+        .extent = {
+            .width = toConvert.width,
+            .height = toConvert.height,
+            .depth = toConvert.depth,
+        },
+        .mipLevels = toConvert.mipLevels,
+        .arrayLayers = toConvert.arrayLayers,
+        .samples = toConvert.samples,
+        .tiling = toConvert.tiling,
+        .usage = toConvert.usage,
+        .sharingMode = toConvert.sharingMode,
+        .queueFamilyIndexCount = static_cast<uint32_t>(toConvert.queueFamilyIndices.size()),
+        .pQueueFamilyIndices = toConvert.queueFamilyIndices.data(),
+        .initialLayout = toConvert.initialLayout,
+    };
+}
+
+struct VmaImage
+{
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocationInfo = {};
+    VkImage image = VK_NULL_HANDLE;
+};
+
+struct ImageViewState
+{
+    const VkImage &image;
+    const VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
+    const VkFormat &format;
+    const VkComponentMapping components = {};
+    const VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    const uint32_t baseMipLevel = 0;
+    const uint32_t levelCount = 1;
+    const uint32_t baseArrayLayer = 0;
+    const uint32_t layerCount = 1;
+};
+inline VkImageViewCreateInfo toVkImageViewCreateInfo(const ImageViewState &toConvert)
+{
+    return VkImageViewCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .image = toConvert.image,
+        .viewType = toConvert.viewType,
+        .format = toConvert.format,
+        .components = toConvert.components,
+        .subresourceRange{
+            .aspectMask = toConvert.aspectMask,
+            .baseMipLevel = toConvert.baseMipLevel,
+            .levelCount = toConvert.levelCount,
+            .baseArrayLayer = toConvert.baseArrayLayer,
+            .layerCount = toConvert.layerCount,
+        },
+    };
+}
+
+struct FramebufferState
+{
+    const VkRenderPass &renderPass;
+    const std::span<const VkImageView> &attachments;
+    const uint32_t &width;
+    const uint32_t &height;
+    const uint32_t layers = 1;
+};
+inline VkFramebufferCreateInfo toVkFramebufferCreateInfo(const FramebufferState &toConvert)
+{
+    return VkFramebufferCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .renderPass = toConvert.renderPass,
+        .attachmentCount = static_cast<uint32_t>(toConvert.attachments.size()),
+        .pAttachments = toConvert.attachments.data(),
+        .width = toConvert.width,
+        .height = toConvert.height,
+        .layers = toConvert.layers,
+    };
+}

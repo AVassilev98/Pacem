@@ -35,7 +35,7 @@ GraphicsPipeline::GraphicsPipeline(const State &&state)
     {
         m_descriptorSetLayouts[i] = state.pipelineLayout.descSetLayouts[i];
     }
-    m_pipelineLayout = VkInit::CreateVkPipelineLayout(toVkPipelineLayoutCreateInfo(std::move(state.pipelineLayout)));
+    m_pipelineLayout = VkInit::CreateVkPipelineLayout(state.pipelineLayout);
 
     VkPipelineVertexInputStateCreateInfo vertexInputState = toVkPipelineVertexInputStateCreateInfo(state.vertexInputState);
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = toVkPipelineInputAssemblyStateCreateInfo(state.inputAssemblyState);
@@ -100,14 +100,18 @@ void GraphicsPipeline::freeResources()
 
 ComputePipeline::ComputePipeline(const State &&state)
 {
-    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = VkInit::CreateVkPipelineShaderStageCreateInfo(state.CS);
-    m_pipelineLayout = VkInit::CreateVkPipelineLayout(toVkPipelineLayoutCreateInfo(state.pipelineLayoutState));
+    m_pipelineLayout = VkInit::CreateVkPipelineLayout(state.pipelineLayoutState);
     const std::span<const VkDescriptorSetLayout, DSL_FREQ_COUNT> &descriptorSets = state.pipelineLayoutState.descSetLayouts;
     std::copy(descriptorSets.begin(), descriptorSets.end(), m_descriptorSetLayouts.begin());
 
-    VkInit::ComputePipelineState computePipelineState = {
-        .shader = shaderStageCreateInfo,
+    VkComputePipelineCreateInfo computePipelineState = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .stage = VkInit::CreateVkPipelineShaderStageCreateInfo(state.CS),
         .layout = m_pipelineLayout,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = 0,
     };
     m_pipeline = VkInit::CreateVkComputePipeline(computePipelineState);
 }

@@ -136,23 +136,6 @@ void Gui::setImGuiStyles()
 Gui::Gui()
 {
     Renderer &renderer = Renderer::Get();
-
-    // VkInit::RenderPassState::Attachment colorAttachment = {
-    //     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-    //     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    //     .initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    //     .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    //     .format = VK_FORMAT_B8G8R8A8_UNORM,
-    //     .samples = VK_SAMPLE_COUNT_1_BIT,
-    //     .attachment = 0,
-    //     .referenceLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    // };
-
-    // VkInit::RenderPassState renderPassState = {
-    //     .colorAttachments = std::span(&colorAttachment, 1),
-    //     .bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-    // };
-
     m_renderPass = VkInit::CreateVkRenderPass({
         .colorAttachments{{
             {

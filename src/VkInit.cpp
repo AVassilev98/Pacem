@@ -7,22 +7,27 @@
 
 VkPipelineShaderStageCreateInfo VkInit::CreateVkPipelineShaderStageCreateInfo(const Shader &shader)
 {
-    VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-    pipelineShaderStageCreateInfo.stage = shader.m_moduleFlags;
-    pipelineShaderStageCreateInfo.module = shader.m_module;
-    pipelineShaderStageCreateInfo.pName = "main";
-
-    return pipelineShaderStageCreateInfo;
+    return VkPipelineShaderStageCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .stage = shader.m_moduleFlags,
+        .module = shader.m_module,
+        .pName = "main",
+        .pSpecializationInfo = VK_NULL_HANDLE,
+    };
 }
 
 VkDescriptorSetLayout VkInit::CreateEmptyVkDescriptorSetLayout()
 {
     Renderer &renderer = Renderer::Get();
-
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    descriptorSetLayoutInfo.bindingCount = 0;
-    descriptorSetLayoutInfo.pBindings = nullptr;
-
+    constexpr VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .bindingCount = 0,
+        .pBindings = nullptr,
+    };
     VkDescriptorSetLayout descriptorSetLayout;
     VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.getDevice(), &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
     return descriptorSetLayout;
@@ -31,11 +36,13 @@ VkDescriptorSetLayout VkInit::CreateEmptyVkDescriptorSetLayout()
 VkDescriptorSetLayout VkInit::CreateVkDescriptorSetLayout(const std::span<const VkDescriptorSetLayoutBinding> &bindings)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    descriptorSetLayoutInfo.bindingCount = bindings.size();
-    descriptorSetLayoutInfo.pBindings = bindings.data();
-
+    const VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .flags = 0,
+        .bindingCount = static_cast<uint32_t>(bindings.size()),
+        .pBindings = bindings.data(),
+    };
     VkDescriptorSetLayout descriptorSetLayout;
     VK_LOG_ERR(vkCreateDescriptorSetLayout(renderer.getDevice(), &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout));
     return descriptorSetLayout;
@@ -51,10 +58,11 @@ VkDescriptorSetLayoutBinding VkInit::CreateVkDescriptorSetLayoutBinding(VkDescri
     };
 }
 
-VkPipelineLayout VkInit::CreateVkPipelineLayout(const VkPipelineLayoutCreateInfo &pipelineLayoutCreateInfo)
+VkPipelineLayout VkInit::CreateVkPipelineLayout(const PipelineLayoutState &state)
 {
     Renderer &renderer = Renderer::Get();
-    VkPipelineLayout pipelineLayout;
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = toVkPipelineLayoutCreateInfo(state);
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     VK_LOG_ERR(vkCreatePipelineLayout(renderer.getDevice(), &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
     return pipelineLayout;
 }
@@ -67,21 +75,11 @@ VkPipeline VkInit::CreateVkGraphicsPipeline(const VkGraphicsPipelineCreateInfo &
     return pipeline;
 }
 
-VkPipeline VkInit::CreateVkComputePipeline(const ComputePipelineState &state)
+VkPipeline VkInit::CreateVkComputePipeline(const VkComputePipelineCreateInfo &state)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkComputePipelineCreateInfo computePipelineCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .flags = 0,
-        .stage = state.shader,
-        .layout = state.layout,
-        .basePipelineHandle = 0,
-        .basePipelineIndex = 0,
-    };
-
     VkPipeline pipeline = VK_NULL_HANDLE;
-    VK_LOG_ERR(vkCreateComputePipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &pipeline));
+    VK_LOG_ERR(vkCreateComputePipelines(renderer.getDevice(), VK_NULL_HANDLE, 1, &state, nullptr, &pipeline));
     return pipeline;
 }
 
@@ -164,106 +162,36 @@ VkRenderPass VkInit::CreateVkRenderPass(const RenderPassState &state)
 VkSampler VkInit::CreateVkSampler(const SamplerState &state)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkSamplerCreateInfo samplerCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = state.magFilter,
-        .minFilter = state.minFilter,
-        .mipmapMode = state.mipmapMode,
-        .addressModeU = state.addressModeU,
-        .addressModeV = state.addressModeV,
-        .addressModeW = state.addressModeW,
-        .mipLodBias = 0.0f,
-        .anisotropyEnable = state.anisotropyEnable,
-        .maxAnisotropy = state.maxAnisotropy,
-        .compareEnable = state.compareEnable,
-        .compareOp = state.compareOp,
-        .minLod = state.minLod,
-        .maxLod = state.maxLod,
-        .borderColor = state.borderColor,
-        .unnormalizedCoordinates = state.unnormalizedCoordinates,
-    };
-
+    VkSamplerCreateInfo samplerCreateInfo = toVkSamplerCreateInfo(state);
     VkSampler sampler = VK_NULL_HANDLE;
     VK_LOG_ERR(vkCreateSampler(renderer.getDevice(), &samplerCreateInfo, nullptr, &sampler));
     return sampler;
 }
 
-VkBuffer VkInit::CreateVkBuffer(const BufferState &state)
+VmaBuffer VkInit::CreateVkBuffer(const BufferState &state)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkBufferCreateInfo bufferCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = state.size,
-        .usage = state.usage,
-        .sharingMode = state.sharingMode,
-        .queueFamilyIndexCount = static_cast<uint32_t>(state.queueFamilyIndices.size()),
-        .pQueueFamilyIndices = state.queueFamilyIndices.data(),
-    };
-
-    VmaAllocationCreateInfo vmaAllocationInfo = {
-        .flags = state.allocation.flags,
-        .usage = state.allocation.usage,
-    };
-
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VK_LOG_ERR(vmaCreateBuffer(renderer.getAllocator(), &bufferCreateInfo, &vmaAllocationInfo, &buffer, &state.allocation.allocation,
-                               &state.allocation.allocationInfo));
+    VkBufferCreateInfo bufferCreateInfo = toVkBufferCreateInfo(state);
+    VmaBuffer buffer;
+    VK_LOG_ERR(vmaCreateBuffer(renderer.getAllocator(), &bufferCreateInfo, &state.allocation, &buffer.buffer, &buffer.allocation,
+                               &buffer.allocationInfo));
     return buffer;
 }
 
-VkImage VkInit::CreateVkImage(const ImageState &state)
+VmaImage VkInit::CreateVkImage(const ImageState &state)
 {
     Renderer &renderer = Renderer::Get();
-    VkImageCreateInfo imageCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = state.type,
-        .format = state.format,
-        .extent = {.width = state.width, .height = state.height, .depth = state.depth,},
-        .mipLevels = state.mipLevels,
-        .arrayLayers = state.arrayLayers,
-        .samples = state.samples,
-        .tiling = state.tiling,
-        .usage = state.usage,
-        .sharingMode = state.sharingMode,
-        .queueFamilyIndexCount = static_cast<uint32_t>(state.queueFamilyIndices.size()),
-        .pQueueFamilyIndices = state.queueFamilyIndices.data(),
-        .initialLayout = state.initialLayout,
-    };
-
-    VmaAllocationCreateInfo allocationCreateInfo = {
-        .flags = state.allocation.flags,
-        .usage = state.allocation.usage,
-    };
-
-    VkImage image = VK_NULL_HANDLE;
-    VK_LOG_ERR(vmaCreateImage(renderer.getAllocator(), &imageCreateInfo, &allocationCreateInfo, &image, &state.allocation.allocation,
-                              &state.allocation.allocationInfo));
+    VkImageCreateInfo imageCreateInfo = toVkImageCreateInfo(state);
+    VmaImage image;
+    VK_LOG_ERR(vmaCreateImage(renderer.getAllocator(), &imageCreateInfo, &state.allocation, &image.image, &image.allocation,
+                              &image.allocationInfo));
     return image;
 }
 
 VkImageView VkInit::CreateVkImageView(const ImageViewState &state)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkImageSubresourceRange subresourceRange = {
-        .aspectMask = state.aspectMask,
-        .baseMipLevel = state.baseMipLevel,
-        .levelCount = state.levelCount,
-        .baseArrayLayer = state.baseArrayLayer,
-        .layerCount = state.layerCount,
-    };
-
-    VkImageViewCreateInfo imageViewCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = state.image,
-        .viewType = state.viewType,
-        .format = state.format,
-        .components = state.components,
-        .subresourceRange = subresourceRange,
-    };
-
+    VkImageViewCreateInfo imageViewCreateInfo = toVkImageViewCreateInfo(state);
     VkImageView imageView = VK_NULL_HANDLE;
     VK_LOG_ERR(vkCreateImageView(renderer.getDevice(), &imageViewCreateInfo, nullptr, &imageView));
     return imageView;
@@ -272,17 +200,7 @@ VkImageView VkInit::CreateVkImageView(const ImageViewState &state)
 VkFramebuffer VkInit::CreateVkFramebuffer(const FramebufferState &state)
 {
     Renderer &renderer = Renderer::Get();
-
-    VkFramebufferCreateInfo framebufferCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = state.renderPass,
-        .attachmentCount = static_cast<uint32_t>(state.attachments.size()),
-        .pAttachments = state.attachments.data(),
-        .width = state.width,
-        .height = state.height,
-        .layers = state.layers,
-    };
-
+    VkFramebufferCreateInfo framebufferCreateInfo = toVkFramebufferCreateInfo(state);
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VK_LOG_ERR(vkCreateFramebuffer(renderer.getDevice(), &framebufferCreateInfo, nullptr, &framebuffer));
     return framebuffer;
