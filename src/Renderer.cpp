@@ -145,6 +145,13 @@ void Renderer::initImGuiGlfwVulkan(VkRenderPass renderPass)
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
+void Renderer::shutdownImGuiGlfwVulkan()
+{
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
 static VkBool32 message(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
@@ -393,7 +400,7 @@ const DeviceInfo Renderer::createDevice()
     deviceCreateInfo.pEnabledFeatures = &m_physDeviceInfo.deviceFeatures;
 
     constexpr std::array requiredExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
-                                                       VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, VK_KHR_MAINTENANCE_2_EXTENSION_NAME};
+                                               VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, VK_KHR_MAINTENANCE_2_EXTENSION_NAME};
     deviceCreateInfo.enabledExtensionCount = requiredExtensions.size();
     deviceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
     DeviceInfo deviceInfo = {};

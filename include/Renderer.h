@@ -23,6 +23,7 @@ class Renderer
     VkDescriptorPool getDescriptorPool();
 
     void initImGuiGlfwVulkan(VkRenderPass renderPass);
+    void shutdownImGuiGlfwVulkan();
 
     VkResult draw();
     VkExtent2D getDrawAreaExtent();

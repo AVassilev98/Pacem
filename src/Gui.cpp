@@ -136,6 +136,7 @@ void Gui::setImGuiStyles()
 Gui::Gui()
 {
     Renderer &renderer = Renderer::Get();
+
     m_renderPass = VkInit::CreateVkRenderPass({
         .colorAttachments{{
             {
@@ -158,11 +159,10 @@ Gui::Gui()
 Gui::~Gui()
 {
     Renderer &renderer = Renderer::Get();
+
     m_framebuffers.destroy();
     vkDestroyRenderPass(renderer.getDevice(), m_renderPass, nullptr);
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    renderer.shutdownImGuiGlfwVulkan();
 }
 
 void Gui::collectImGuiFrameData()
